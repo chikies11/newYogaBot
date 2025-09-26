@@ -31,15 +31,14 @@
 
     <build>
         <plugins>
-            <!-- Сборка fat-jar для Render -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-assembly-plugin</artifactId>
-                <version>3.6.0</version>
+                <version>3.4.2</version>
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.yoga.Main</mainClass>
+                            <mainClass>com.yoga.YogaBot</mainClass> <!-- <- твой класс с main -->
                         </manifest>
                     </archive>
                     <descriptorRefs>
@@ -58,4 +57,5 @@
             </plugin>
         </plugins>
     </build>
+
 </project>
