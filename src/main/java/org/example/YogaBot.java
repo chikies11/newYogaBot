@@ -177,11 +177,31 @@ public class YogaBot extends TelegramLongPollingBot {
         InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        rows.add(List.of(new InlineKeyboardButton("🔔 Уведомления").setCallbackData("menu_notify")));
-        rows.add(List.of(new InlineKeyboardButton("📖 Расписание").setCallbackData("menu_schedule")));
-        rows.add(List.of(new InlineKeyboardButton("👥 Записавшиеся").setCallbackData("menu_signups")));
-        rows.add(List.of(new InlineKeyboardButton("✏️ Изменить занятие").setCallbackData("menu_edit")));
-        rows.add(List.of(new InlineKeyboardButton("❌ Отменить занятие").setCallbackData("menu_cancel")));
+
+        InlineKeyboardButton btn1 = new InlineKeyboardButton();
+        btn1.setText("🔔 Уведомления");
+        btn1.setCallbackData("menu_notify");
+        rows.add(List.of(btn1));
+
+        InlineKeyboardButton btn2 = new InlineKeyboardButton();
+        btn2.setText("📖 Расписание");
+        btn2.setCallbackData("menu_schedule");
+        rows.add(List.of(btn2));
+
+        InlineKeyboardButton btn3 = new InlineKeyboardButton();
+        btn3.setText("👥 Записавшиеся");
+        btn3.setCallbackData("menu_signups");
+        rows.add(List.of(btn3));
+
+        InlineKeyboardButton btn4 = new InlineKeyboardButton();
+        btn4.setText("✏️ Изменить занятие");
+        btn4.setCallbackData("menu_edit");
+        rows.add(List.of(btn4));
+
+        InlineKeyboardButton btn5 = new InlineKeyboardButton();
+        btn5.setText("❌ Отменить занятие");
+        btn5.setCallbackData("menu_cancel");
+        rows.add(List.of(btn5));
 
         markup.setKeyboard(rows);
         msg.setReplyMarkup(markup);
