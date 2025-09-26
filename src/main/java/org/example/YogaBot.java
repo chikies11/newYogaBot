@@ -14,17 +14,30 @@ import java.util.concurrent.*;
 
 public class YogaBot extends TelegramLongPollingBot {
 
-    private final String BOT_USERNAME = System.getenv("BOT_USERNAME");
-    private final String BOT_TOKEN = System.getenv("BOT_TOKEN");
-    private final String ADMIN_ID = System.getenv("ADMIN_ID");
-    private final String CHANNEL_ID = System.getenv("CHANNEL_ID");
-    private final String DB_URL = System.getenv("DATABASE_URL");
+    private final String BOT_USERNAME;
+    private final String BOT_TOKEN;
+    private final String ADMIN_ID;
+    private final String CHANNEL_ID;
+    private final String DB_URL;
 
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
 
     public YogaBot() {
+        BOT_USERNAME = requireEnv("BOT_USERNAME");
+        BOT_TOKEN = requireEnv("BOT_TOKEN");
+        ADMIN_ID = requireEnv("ADMIN_ID");
+        CHANNEL_ID = requireEnv("CHANNEL_ID");
+        DB_URL = requireEnv("DATABASE_URL");
+
         initDb();
         scheduleDailyReminder();
+    }
+
+    /** Проверка и получение переменной окружения */
+    private static String requireEnv(String name) {
+        String val = System.getenv(name);
+        if (val == null || val.isEmpty()) throw new IllegalStateException("Environment variable " + name + " is not set");
+        return val;
     }
 
     /** Создание таблиц, если их нет */
@@ -57,15 +70,17 @@ public class YogaBot extends TelegramLongPollingBot {
         }
     }
 
-    /** Планировщик: отправка уведомления каждый день в 14:00 (МСК) */
+    /** Планировщик: уведомление каждый день в 14:00 (МСК) */
     private void scheduleDailyReminder() {
         Runnable task = () -> {
             try (Connection conn = DriverManager.getConnection(DB_URL)) {
                 PreparedStatement ps = conn.prepareStatement("""
                     SELECT id, datetime, title FROM lessons
-                    WHERE datetime::date = (CURRENT_DATE + INTERVAL '1 day')
+                    WHERE datetime >= CURRENT_DATE + 1
+                      AND datetime < CURRENT_DATE + 2
                 """);
                 ResultSet rs = ps.executeQuery();
+
                 while (rs.next()) {
                     int lessonId = rs.getInt("id");
                     Timestamp dt = rs.getTimestamp("datetime");
@@ -75,31 +90,25 @@ public class YogaBot extends TelegramLongPollingBot {
                             dt.toLocalDateTime().toLocalTime() +
                             " — " + title;
 
-                    // inline-кнопка "Записаться"
-                    InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
-                    List<InlineKeyboardButton> row = new ArrayList<>();
-                    InlineKeyboardButton signupBtn = new InlineKeyboardButton();
-                    signupBtn.setText("Записаться");
-                    signupBtn.setCallbackData("signup_" + lessonId);
-                    row.add(signupBtn);
-                    markup.setKeyboard(List.of(row));
+                    InlineKeyboardButton btn = new InlineKeyboardButton();
+                    btn.setText("Записаться");
+                    btn.setCallbackData("signup_" + lessonId);
 
-                    SendMessage msg = new SendMessage(CHANNEL_ID, text);
-                    msg.setReplyMarkup(markup);
-                    execute(msg);
+                    InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+                    markup.setKeyboard(List.of(List.of(btn)));
+
+                    sendMsg(CHANNEL_ID, text, markup);
                 }
             } catch (Exception e) {
                 e.printStackTrace();
             }
         };
 
-        // вычисляем время до 14:00 по МСК
         ZoneId moscow = ZoneId.of("Europe/Moscow");
         LocalDateTime now = LocalDateTime.now(moscow);
-        LocalDateTime next14 = now.withHour(14).withMinute(0).withSecond(0);
-        if (now.isAfter(next14)) {
-            next14 = next14.plusDays(1);
-        }
+        LocalDateTime next14 = now.withHour(14).withMinute(0).withSecond(0).withNano(0);
+        if (now.isAfter(next14)) next14 = next14.plusDays(1);
+
         long initialDelay = Duration.between(now, next14).toSeconds();
         long oneDay = 24 * 60 * 60;
 
@@ -107,14 +116,10 @@ public class YogaBot extends TelegramLongPollingBot {
     }
 
     @Override
-    public String getBotUsername() {
-        return BOT_USERNAME;
-    }
+    public String getBotUsername() { return BOT_USERNAME; }
 
     @Override
-    public String getBotToken() {
-        return BOT_TOKEN;
-    }
+    public String getBotToken() { return BOT_TOKEN; }
 
     @Override
     public void onUpdateReceived(Update update) {
@@ -152,10 +157,9 @@ public class YogaBot extends TelegramLongPollingBot {
                 if (data.startsWith("signup_")) {
                     int lessonId = Integer.parseInt(data.split("_")[1]);
                     try (Connection conn = DriverManager.getConnection(DB_URL)) {
-                        PreparedStatement ps = conn.prepareStatement("""
-                            INSERT INTO signups (lesson_id, username)
-                            VALUES (?, ?)
-                        """);
+                        PreparedStatement ps = conn.prepareStatement(
+                                "INSERT INTO signups (lesson_id, username) VALUES (?, ?)"
+                        );
                         ps.setInt(1, lessonId);
                         ps.setString(2, user != null ? user : userId.toString());
                         ps.executeUpdate();
@@ -170,45 +174,32 @@ public class YogaBot extends TelegramLongPollingBot {
         }
     }
 
-    /** Главное меню */
-    private void sendMainMenu(String chatId) throws TelegramApiException {
-        SendMessage msg = new SendMessage(chatId,
-                "Выберите действие:");
+    private void sendMainMenu(String chatId) {
+        SendMessage msg = new SendMessage(chatId, "Выберите действие:");
         InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
 
-        InlineKeyboardButton btn1 = new InlineKeyboardButton();
-        btn1.setText("🔔 Уведомления");
-        btn1.setCallbackData("menu_notify");
-        rows.add(List.of(btn1));
-
-        InlineKeyboardButton btn2 = new InlineKeyboardButton();
-        btn2.setText("📖 Расписание");
-        btn2.setCallbackData("menu_schedule");
-        rows.add(List.of(btn2));
-
-        InlineKeyboardButton btn3 = new InlineKeyboardButton();
-        btn3.setText("👥 Записавшиеся");
-        btn3.setCallbackData("menu_signups");
-        rows.add(List.of(btn3));
-
-        InlineKeyboardButton btn4 = new InlineKeyboardButton();
-        btn4.setText("✏️ Изменить занятие");
-        btn4.setCallbackData("menu_edit");
-        rows.add(List.of(btn4));
-
-        InlineKeyboardButton btn5 = new InlineKeyboardButton();
-        btn5.setText("❌ Отменить занятие");
-        btn5.setCallbackData("menu_cancel");
-        rows.add(List.of(btn5));
+        rows.add(List.of(button("🔔 Уведомления", "menu_notify")));
+        rows.add(List.of(button("📖 Расписание", "menu_schedule")));
+        rows.add(List.of(button("👥 Записавшиеся", "menu_signups")));
+        rows.add(List.of(button("✏️ Изменить занятие", "menu_edit")));
+        rows.add(List.of(button("❌ Отменить занятие", "menu_cancel")));
 
         markup.setKeyboard(rows);
         msg.setReplyMarkup(markup);
-        execute(msg);
+
+        sendMsg(msg);
     }
 
-    private void toggleSubscription(String chatId, Long userId) throws TelegramApiException {
+    private InlineKeyboardButton button(String text, String callback) {
+        InlineKeyboardButton btn = new InlineKeyboardButton();
+        btn.setText(text);
+        btn.setCallbackData(callback);
+        return btn;
+    }
+
+    private void toggleSubscription(String chatId, Long userId) {
         try (Connection conn = DriverManager.getConnection(DB_URL)) {
             PreparedStatement check = conn.prepareStatement("SELECT id FROM subscriptions WHERE user_id=?");
             check.setLong(1, userId);
@@ -229,10 +220,10 @@ public class YogaBot extends TelegramLongPollingBot {
         }
     }
 
-    private void showSchedule(String chatId) throws TelegramApiException {
+    private void showSchedule(String chatId) {
         try (Connection conn = DriverManager.getConnection(DB_URL)) {
             Statement st = conn.createStatement();
-            ResultSet rs = st.executeQuery("SELECT id, datetime, title FROM lessons ORDER BY datetime");
+            ResultSet rs = st.executeQuery("SELECT datetime, title FROM lessons ORDER BY datetime");
             StringBuilder sb = new StringBuilder("📖 Расписание:\n");
             while (rs.next()) {
                 sb.append("• ")
@@ -247,7 +238,7 @@ public class YogaBot extends TelegramLongPollingBot {
         }
     }
 
-    private void showSignups(String chatId) throws TelegramApiException {
+    private void showSignups(String chatId) {
         try (Connection conn = DriverManager.getConnection(DB_URL)) {
             Statement st = conn.createStatement();
             ResultSet rs = st.executeQuery("""
@@ -268,10 +259,29 @@ public class YogaBot extends TelegramLongPollingBot {
     }
 
     private boolean isAdmin(Long userId) {
-        return ADMIN_ID != null && ADMIN_ID.equals(userId.toString());
+        return ADMIN_ID.equals(userId.toString());
     }
 
-    private void sendMsg(String chatId, String text) throws TelegramApiException {
-        execute(new SendMessage(chatId, text));
+    /** Унифицированная отправка сообщения без риска execute(void) */
+    private void sendMsg(String chatId, String text) {
+        sendMsg(new SendMessage(chatId, text));
+    }
+
+    private void sendMsg(String chatId, String text, InlineKeyboardMarkup markup) {
+        SendMessage msg = new SendMessage();
+        msg.setChatId(chatId);       // обязательно String
+        msg.setText(text);           // обязательно String
+        msg.setReplyMarkup(markup);  // если markup == null, всё ок
+
+        sendMsg(msg);                // вызываем твою обёртку, которая execute()
+    }
+
+
+    private void sendMsg(SendMessage message) {
+        try {
+            execute(message);
+        } catch (TelegramApiException e) {
+            e.printStackTrace();
+        }
     }
 }

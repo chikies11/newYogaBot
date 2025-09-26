@@ -1,15 +1,22 @@
 package org.example;
 
 import org.telegram.telegrambots.meta.TelegramBotsApi;
+import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 
 public class Main {
     public static void main(String[] args) {
         try {
+            // Инициализация API
             TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
-            botsApi.registerBot(new YogaBot());
-            System.out.println("✅ YogaBot запущен!");
-        } catch (Exception e) {
+
+            // Регистрируем бота
+            YogaBot bot = new YogaBot();
+            botsApi.registerBot(bot);
+
+            System.out.println("✅ YogaBot успешно запущен!");
+
+        } catch (TelegramApiException e) {
             e.printStackTrace();
         }
     }
