@@ -38,7 +38,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>org.example.YogaBot</mainClass> <!-- <- твой класс с main -->
+                            <mainClass>org.example.Main</mainClass>
                         </manifest>
                     </archive>
                     <descriptorRefs>
@@ -59,3 +59,7 @@
     </build>
 
 </project>
+
+
+
+
