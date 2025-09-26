@@ -1,26 +1,29 @@
-# Используем официальное изображение Java 17 с Maven
-FROM maven:3.9.3-eclipse-temurin-17 AS build
+# Stage 1: build
+FROM maven:3.9.0-eclipse-temurin-17 AS build
 
-# Копируем проект
 WORKDIR /app
+
+# Копируем pom и исходники
 COPY pom.xml .
 COPY src ./src
 
-# Сборка fat-jar
+# Сборка jar с зависимостями
 RUN mvn clean package
 
-# Новый контейнер для запуска
+# Stage 2: runtime
 FROM eclipse-temurin:17-jre
 
 WORKDIR /app
+
+# Копируем собранный jar
 COPY --from=build /app/target/yogabot-1.0-SNAPSHOT-jar-with-dependencies.jar ./yogabot.jar
 
-# Переменные окружения (Render сможет их передавать)
-ENV BOT_USERNAME="katysyoga_bot"
-ENV BOT_TOKEN="7970982996:AAFeH9IMDHqyTTmqhshuxdhRibxz7fVP_I0"
-ENV ADMIN_ID="639619404"
-ENV CHANNEL_ID="@yoga_yollayo11"
-ENV DATABASE_URL="postgresql://yogabot_user:NZ8XT9dWuccinu31ke6qcy7KcnwY5cpC@dpg-d3bbrbu3jp1c73atqikg-a/yogabot_db"
+# Используем переменные окружения, которые будут задаваться в Render
+ENV BOT_USERNAME=${BOT_USERNAME}
+ENV BOT_TOKEN=${BOT_TOKEN}
+ENV ADMIN_ID=${ADMIN_ID}
+ENV CHANNEL_ID=${CHANNEL_ID}
+ENV DATABASE_URL=${DATABASE_URL}
 
-# Запуск бота
+# Команда запуска бота
 CMD ["java", "-jar", "yogabot.jar"]
