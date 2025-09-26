@@ -2,7 +2,6 @@ package org.example;
 
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
-import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
@@ -15,24 +14,107 @@ import java.util.concurrent.*;
 
 public class YogaBot extends TelegramLongPollingBot {
 
-    private final String BOT_TOKEN = System.getenv("7970982996:AAFeH9IMDHqyTTmqhshuxdhRibxz7fVP_I0");
-    private final String BOT_USERNAME = System.getenv("katysyoga_bot");
-    private final String ADMIN_ID = System.getenv("639619404"); // твой userId
-    private final String CHANNEL_ID = System.getenv("@yoga_yollayo11"); // @username канала
-    private final String DB_URL = System.getenv("DATABASE_URL=postgres://user:27Kirill2727Kirill27@postgres/dbname");
+    private final String BOT_USERNAME = System.getenv("BOT_USERNAME");
+    private final String BOT_TOKEN = System.getenv("BOT_TOKEN");
+    private final String ADMIN_ID = System.getenv("ADMIN_ID");
+    private final String CHANNEL_ID = System.getenv("CHANNEL_ID");
+    private final String DB_URL = System.getenv("DATABASE_URL");
 
-    private boolean reminderEnabled = false;
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
 
     public YogaBot() {
         initDb();
-        startDailyReminder();
+        scheduleDailyReminder();
+    }
+
+    /** Создание таблиц, если их нет */
+    private void initDb() {
+        try (Connection conn = DriverManager.getConnection(DB_URL)) {
+            Statement st = conn.createStatement();
+            st.executeUpdate("""
+                CREATE TABLE IF NOT EXISTS lessons (
+                    id SERIAL PRIMARY KEY,
+                    datetime TIMESTAMP NOT NULL,
+                    title TEXT NOT NULL
+                )
+            """);
+            st.executeUpdate("""
+                CREATE TABLE IF NOT EXISTS signups (
+                    id SERIAL PRIMARY KEY,
+                    lesson_id INT REFERENCES lessons(id) ON DELETE CASCADE,
+                    username TEXT NOT NULL
+                )
+            """);
+            st.executeUpdate("""
+                CREATE TABLE IF NOT EXISTS subscriptions (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT UNIQUE NOT NULL
+                )
+            """);
+            System.out.println("✅ База данных инициализирована.");
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    /** Планировщик: отправка уведомления каждый день в 14:00 (МСК) */
+    private void scheduleDailyReminder() {
+        Runnable task = () -> {
+            try (Connection conn = DriverManager.getConnection(DB_URL)) {
+                PreparedStatement ps = conn.prepareStatement("""
+                    SELECT id, datetime, title FROM lessons
+                    WHERE datetime::date = (CURRENT_DATE + INTERVAL '1 day')
+                """);
+                ResultSet rs = ps.executeQuery();
+                while (rs.next()) {
+                    int lessonId = rs.getInt("id");
+                    Timestamp dt = rs.getTimestamp("datetime");
+                    String title = rs.getString("title");
+
+                    String text = "📅 Завтра в " +
+                            dt.toLocalDateTime().toLocalTime() +
+                            " — " + title;
+
+                    // inline-кнопка "Записаться"
+                    InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+                    List<InlineKeyboardButton> row = new ArrayList<>();
+                    InlineKeyboardButton signupBtn = new InlineKeyboardButton();
+                    signupBtn.setText("Записаться");
+                    signupBtn.setCallbackData("signup_" + lessonId);
+                    row.add(signupBtn);
+                    markup.setKeyboard(List.of(row));
+
+                    SendMessage msg = new SendMessage(CHANNEL_ID, text);
+                    msg.setReplyMarkup(markup);
+                    execute(msg);
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        };
+
+        // вычисляем время до 14:00 по МСК
+        ZoneId moscow = ZoneId.of("Europe/Moscow");
+        LocalDateTime now = LocalDateTime.now(moscow);
+        LocalDateTime next14 = now.withHour(14).withMinute(0).withSecond(0);
+        if (now.isAfter(next14)) {
+            next14 = next14.plusDays(1);
+        }
+        long initialDelay = Duration.between(now, next14).toSeconds();
+        long oneDay = 24 * 60 * 60;
+
+        scheduler.scheduleAtFixedRate(task, initialDelay, oneDay, TimeUnit.SECONDS);
     }
 
     @Override
-    public String getBotUsername() { return BOT_USERNAME; }
+    public String getBotUsername() {
+        return BOT_USERNAME;
+    }
+
     @Override
-    public String getBotToken() { return BOT_TOKEN; }
+    public String getBotToken() {
+        return BOT_TOKEN;
+    }
 
     @Override
     public void onUpdateReceived(Update update) {
@@ -40,204 +122,136 @@ public class YogaBot extends TelegramLongPollingBot {
             if (update.hasMessage() && update.getMessage().hasText()) {
                 String chatId = update.getMessage().getChatId().toString();
                 String text = update.getMessage().getText();
-                String userId = update.getMessage().getFrom().getId().toString();
+                Long userId = update.getMessage().getFrom().getId();
 
-                if (text.equals("/start")) {
-                    if (userId.equals(ADMIN_ID)) sendAdminMenu(chatId);
-                    else sendUserMenu(chatId);
-                } else if (userId.equals(ADMIN_ID)) {
-                    if (text.startsWith("Добавить ")) {
-                        String lesson = text.replace("Добавить ", "").trim();
-                        addLesson(lesson, "");
-                        sendText(chatId, "✅ Занятие добавлено: " + lesson);
-                    } else if (text.startsWith("Отменить ")) {
-                        String lesson = text.replace("Отменить ", "").trim();
-                        cancelLesson(lesson);
-                        sendText(chatId, "❌ Занятие отменено: " + lesson);
+                switch (text) {
+                    case "/start" -> {
+                        sendMsg(chatId, "Привет! Я YogaBot 🧘");
+                        sendMainMenu(chatId);
                     }
+                    case "🔔 Уведомления" -> toggleSubscription(chatId, userId);
+                    case "📖 Расписание" -> showSchedule(chatId);
+                    case "✏️ Изменить занятие" -> {
+                        if (isAdmin(userId)) sendMsg(chatId, "Здесь будет меню изменения.");
+                        else sendMsg(chatId, "⛔ Только админ может изменять занятия.");
+                    }
+                    case "❌ Отменить занятие" -> {
+                        if (isAdmin(userId)) sendMsg(chatId, "Здесь будет выбор занятия для отмены.");
+                        else sendMsg(chatId, "⛔ Только админ может отменять занятия.");
+                    }
+                    case "👥 Записавшиеся" -> showSignups(chatId);
                 }
-            } else if (update.hasCallbackQuery()) {
-                String chatId = update.getCallbackQuery().getMessage().getChatId().toString();
+            }
+
+            if (update.hasCallbackQuery()) {
                 String data = update.getCallbackQuery().getData();
-                String userId = update.getCallbackQuery().getFrom().getId().toString();
-                String username = update.getCallbackQuery().getFrom().getFirstName();
+                String user = update.getCallbackQuery().getFrom().getUserName();
+                Long userId = update.getCallbackQuery().getFrom().getId();
+                String chatId = update.getCallbackQuery().getMessage().getChatId().toString();
 
                 if (data.startsWith("signup_")) {
-                    int lessonId = Integer.parseInt(data.replace("signup_", ""));
-                    addSignup(lessonId, username);
-                    sendText(chatId, "✅ " + username + " записан(а).");
-                }
-
-                if (userId.equals(ADMIN_ID)) {
-                    switch (data) {
-                        case "toggle_reminder":
-                            reminderEnabled = !reminderEnabled;
-                            sendText(chatId, reminderEnabled ? "✅ Отбивка включена" : "❌ Отбивка выключена");
-                            break;
-                        case "view_schedule":
-                            sendText(chatId, getLessons());
-                            break;
-                        case "view_signups":
-                            sendText(chatId, getAllSignups());
-                            break;
+                    int lessonId = Integer.parseInt(data.split("_")[1]);
+                    try (Connection conn = DriverManager.getConnection(DB_URL)) {
+                        PreparedStatement ps = conn.prepareStatement("""
+                            INSERT INTO signups (lesson_id, username)
+                            VALUES (?, ?)
+                        """);
+                        ps.setInt(1, lessonId);
+                        ps.setString(2, user != null ? user : userId.toString());
+                        ps.executeUpdate();
+                        sendMsg(chatId, "✅ Вы записаны на занятие!");
+                    } catch (SQLException e) {
+                        sendMsg(chatId, "⚠️ Вы уже записаны или произошла ошибка.");
                     }
                 }
-                execute(new AnswerCallbackQuery(update.getCallbackQuery().getId()));
             }
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    // ================= UI ==================
-
-    private void sendUserMenu(String chatId) throws TelegramApiException {
-        List<String[]> lessons = fetchLessons();
+    /** Главное меню */
+    private void sendMainMenu(String chatId) throws TelegramApiException {
+        SendMessage msg = new SendMessage(chatId,
+                "Выберите действие:");
         InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
-        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
 
-        for (String[] lesson : lessons) {
-            String id = lesson[0];
-            String datetime = lesson[1];
-            rows.add(Collections.singletonList(InlineKeyboardButton.builder()
-                    .text("🧘 Записаться: " + datetime)
-                    .callbackData("signup_" + id)
-                    .build()));
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(new InlineKeyboardButton("🔔 Уведомления").setCallbackData("menu_notify")));
+        rows.add(List.of(new InlineKeyboardButton("📖 Расписание").setCallbackData("menu_schedule")));
+        rows.add(List.of(new InlineKeyboardButton("👥 Записавшиеся").setCallbackData("menu_signups")));
+        rows.add(List.of(new InlineKeyboardButton("✏️ Изменить занятие").setCallbackData("menu_edit")));
+        rows.add(List.of(new InlineKeyboardButton("❌ Отменить занятие").setCallbackData("menu_cancel")));
+
+        markup.setKeyboard(rows);
+        msg.setReplyMarkup(markup);
+        execute(msg);
+    }
+
+    private void toggleSubscription(String chatId, Long userId) throws TelegramApiException {
+        try (Connection conn = DriverManager.getConnection(DB_URL)) {
+            PreparedStatement check = conn.prepareStatement("SELECT id FROM subscriptions WHERE user_id=?");
+            check.setLong(1, userId);
+            ResultSet rs = check.executeQuery();
+            if (rs.next()) {
+                PreparedStatement del = conn.prepareStatement("DELETE FROM subscriptions WHERE user_id=?");
+                del.setLong(1, userId);
+                del.executeUpdate();
+                sendMsg(chatId, "🔕 Уведомления отключены");
+            } else {
+                PreparedStatement ins = conn.prepareStatement("INSERT INTO subscriptions (user_id) VALUES (?)");
+                ins.setLong(1, userId);
+                ins.executeUpdate();
+                sendMsg(chatId, "🔔 Уведомления включены");
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
-        markup.setKeyboard(rows);
-
-        SendMessage msg = new SendMessage(chatId, "📅 Расписание занятий:");
-        msg.setReplyMarkup(markup);
-        execute(msg);
     }
 
-    private void sendAdminMenu(String chatId) throws TelegramApiException {
-        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
-        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-
-        rows.add(Collections.singletonList(InlineKeyboardButton.builder()
-                .text("🔔 Вкл/Выкл отбивку").callbackData("toggle_reminder").build()));
-        rows.add(Collections.singletonList(InlineKeyboardButton.builder()
-                .text("📅 Расписание").callbackData("view_schedule").build()));
-        rows.add(Collections.singletonList(InlineKeyboardButton.builder()
-                .text("👥 Записавшиеся").callbackData("view_signups").build()));
-
-        markup.setKeyboard(rows);
-
-        SendMessage msg = new SendMessage(chatId, "⚙️ Админская панель:\n" +
-                "Чтобы добавить занятие: `Добавить Пн 19:00`\n" +
-                "Чтобы отменить: `Отменить Пн 19:00`");
-        msg.setReplyMarkup(markup);
-        execute(msg);
+    private void showSchedule(String chatId) throws TelegramApiException {
+        try (Connection conn = DriverManager.getConnection(DB_URL)) {
+            Statement st = conn.createStatement();
+            ResultSet rs = st.executeQuery("SELECT id, datetime, title FROM lessons ORDER BY datetime");
+            StringBuilder sb = new StringBuilder("📖 Расписание:\n");
+            while (rs.next()) {
+                sb.append("• ")
+                        .append(rs.getTimestamp("datetime").toLocalDateTime())
+                        .append(" — ")
+                        .append(rs.getString("title"))
+                        .append("\n");
+            }
+            sendMsg(chatId, sb.toString());
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
     }
 
-    private void sendText(String chatId, String text) throws TelegramApiException {
+    private void showSignups(String chatId) throws TelegramApiException {
+        try (Connection conn = DriverManager.getConnection(DB_URL)) {
+            Statement st = conn.createStatement();
+            ResultSet rs = st.executeQuery("""
+                SELECT lessons.title, signups.username
+                FROM signups
+                JOIN lessons ON lessons.id = signups.lesson_id
+                ORDER BY lessons.datetime
+            """);
+            StringBuilder sb = new StringBuilder("👥 Записавшиеся:\n");
+            while (rs.next()) {
+                sb.append("• ").append(rs.getString("title"))
+                        .append(" — @").append(rs.getString("username")).append("\n");
+            }
+            sendMsg(chatId, sb.toString());
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private boolean isAdmin(Long userId) {
+        return ADMIN_ID != null && ADMIN_ID.equals(userId.toString());
+    }
+
+    private void sendMsg(String chatId, String text) throws TelegramApiException {
         execute(new SendMessage(chatId, text));
     }
-
-    // ================= DB ==================
-
-    private void initDb() {
-        try (Connection conn = DriverManager.getConnection(DB_URL)) {
-            conn.createStatement().execute("CREATE TABLE IF NOT EXISTS lessons (" +
-                    "id SERIAL PRIMARY KEY, datetime TEXT, title TEXT)");
-            conn.createStatement().execute("CREATE TABLE IF NOT EXISTS signups (" +
-                    "id SERIAL PRIMARY KEY, lesson_id INT REFERENCES lessons(id) ON DELETE CASCADE, username TEXT)");
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void addLesson(String datetime, String title) {
-        try (Connection conn = DriverManager.getConnection(DB_URL)) {
-            PreparedStatement ps = conn.prepareStatement("INSERT INTO lessons (datetime, title) VALUES (?, ?)");
-            ps.setString(1, datetime);
-            ps.setString(2, title);
-            ps.executeUpdate();
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void cancelLesson(String datetime) {
-        try (Connection conn = DriverManager.getConnection(DB_URL)) {
-            PreparedStatement ps = conn.prepareStatement("DELETE FROM lessons WHERE datetime = ?");
-            ps.setString(1, datetime);
-            ps.executeUpdate();
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void addSignup(int lessonId, String username) {
-        try (Connection conn = DriverManager.getConnection(DB_URL)) {
-            PreparedStatement ps = conn.prepareStatement(
-                    "INSERT INTO signups (lesson_id, username) VALUES (?, ?) ON CONFLICT DO NOTHING");
-            ps.setInt(1, lessonId);
-            ps.setString(2, username);
-            ps.executeUpdate();
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private List<String[]> fetchLessons() {
-        List<String[]> lessons = new ArrayList<>();
-        try (Connection conn = DriverManager.getConnection(DB_URL)) {
-            ResultSet rs = conn.createStatement().executeQuery("SELECT id, datetime FROM lessons ORDER BY id");
-            while (rs.next()) {
-                lessons.add(new String[]{String.valueOf(rs.getInt("id")), rs.getString("datetime")});
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return lessons;
-    }
-
-    private String getLessons() {
-        List<String[]> lessons = fetchLessons();
-        if (lessons.isEmpty()) return "📭 Расписание пусто.";
-        StringBuilder sb = new StringBuilder("📅 Занятия:\n");
-        for (String[] l : lessons) sb.append("📌 ").append(l[1]).append("\n");
-        return sb.toString();
-    }
-
-    private String getAllSignups() {
-        StringBuilder sb = new StringBuilder();
-        try (Connection conn = DriverManager.getConnection(DB_URL)) {
-            ResultSet rs = conn.createStatement().executeQuery(
-                    "SELECT l.datetime, s.username FROM signups s JOIN lessons l ON l.id = s.lesson_id ORDER BY l.id");
-            while (rs.next()) {
-                sb.append("📌 ").append(rs.getString("datetime")).append(": ")
-                        .append(rs.getString("username")).append("\n");
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return sb.length() == 0 ? "👥 Никто не записан." : sb.toString();
-    }
-
-    // ================= Reminder ==================
-
-    private void startDailyReminder() {
-        Runnable task = () -> {
-            if (reminderEnabled) {
-                try {
-                    sendText(CHANNEL_ID, "🧘 Напоминаем: сегодня занятие по йоге!");
-                } catch (Exception e) { e.printStackTrace(); }
-            }
-        };
-        long delay = computeInitialDelay();
-        scheduler.scheduleAtFixedRate(task, delay, 24 * 60, TimeUnit.MINUTES);
-    }
-
-    private long computeInitialDelay() {
-        ZonedDateTime now = ZonedDateTime.now(ZoneId.of("Europe/Moscow"));
-        ZonedDateTime nextRun = now.withHour(14).withMinute(0).withSecond(0);
-        if (now.compareTo(nextRun) > 0) nextRun = nextRun.plusDays(1);
-        return Duration.between(now, nextRun).toMinutes();
-    }
 }
-
-
-

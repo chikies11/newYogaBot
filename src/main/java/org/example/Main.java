@@ -8,7 +8,7 @@ public class Main {
         try {
             TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
             botsApi.registerBot(new YogaBot());
-            System.out.println("✅ YogaBot запущен");
+            System.out.println("✅ YogaBot запущен!");
         } catch (Exception e) {
             e.printStackTrace();
         }
