@@ -38,7 +38,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.yoga.YogaBot</mainClass> <!-- <- твой класс с main -->
+                            <mainClass>org.example.YogaBot</mainClass> <!-- <- твой класс с main -->
                         </manifest>
                     </archive>
                     <descriptorRefs>
