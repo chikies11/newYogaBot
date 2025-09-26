@@ -14,11 +14,11 @@ import java.util.concurrent.*;
 
 public class YogaBot extends TelegramLongPollingBot {
 
-    private final String BOT_USERNAME = System.getenv("katysyoga_bot");
-    private final String BOT_TOKEN = System.getenv("7970982996:AAFeH9IMDHqyTTmqhshuxdhRibxz7fVP_I0");
-    private final String ADMIN_ID = System.getenv("639619404");
-    private final String CHANNEL_ID = System.getenv("@yoga_yollayo11");
-    private final String DB_URL = System.getenv("postgresql://yogabot_user:NZ8XT9dWuccinu31ke6qcy7KcnwY5cpC@dpg-d3bbrbu3jp1c73atqikg-a/yogabot_db");
+    private final String BOT_USERNAME = System.getenv("BOT_USERNAME");
+    private final String BOT_TOKEN = System.getenv("BOT_TOKEN");
+    private final String ADMIN_ID = System.getenv("ADMIN_ID");
+    private final String CHANNEL_ID = System.getenv("CHANNEL_ID");
+    private final String DB_URL = System.getenv("DATABASE_URL");
 
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
 
