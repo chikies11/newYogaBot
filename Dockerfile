@@ -7,14 +7,14 @@ COPY pom.xml .
 COPY src ./src
 
 # Сборка fat-jar (Spring Boot repackage)
-RUN mvn clean package -DskipTests
+RUN mvn clean package spring-boot:repackage -DskipTests
 
 # Stage 2: runtime
 FROM eclipse-temurin:17-jre
 WORKDIR /app
 
 # Копируем любой JAR из target и называем его app.jar
-COPY --from=build /app/target/*.jar app.jar
+COPY --from=build /app/target/*-SNAPSHOT.jar app.jar
 
 # Пробрасываем переменные окружения
 ENV BOT_USERNAME=${BOT_USERNAME}
