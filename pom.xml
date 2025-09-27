@@ -11,9 +11,10 @@
 
     <properties>
         <java.version>17</java.version>
-        <spring-boot.version>3.2.5</spring-boot.version>
-        <maven.compiler.source>${java.version}</maven.compiler.source>
-        <maven.compiler.target>${java.version}</maven.compiler.target>
+        <spring.boot.version>3.2.5</spring.boot.version>
+        <telegrambots.version>6.7.0</telegrambots.version>
+        <postgres.version>42.6.0</postgres.version>
+        <jackson-jaxb.version>2.15.4</jackson-jaxb.version>
     </properties>
 
     <dependencyManagement>
@@ -21,7 +22,7 @@
             <dependency>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-dependencies</artifactId>
-                <version>${spring-boot.version}</version>
+                <version>${spring.boot.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -45,26 +46,27 @@
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
-            <scope>runtime</scope>
+            <version>${postgres.version}</version>
         </dependency>
 
-        <!-- Jackson JAXB module -->
+        <!-- Jackson JAXB annotations -->
         <dependency>
             <groupId>com.fasterxml.jackson.module</groupId>
             <artifactId>jackson-module-jaxb-annotations</artifactId>
-            <version>2.15.4</version>
+            <version>${jackson-jaxb.version}</version>
         </dependency>
 
-        <!-- JAXB для Java 17 -->
+        <!-- Telegram Bots API -->
         <dependency>
-            <groupId>jakarta.xml.bind</groupId>
-            <artifactId>jakarta.xml.bind-api</artifactId>
-            <version>4.0.0</version>
+            <groupId>org.telegram</groupId>
+            <artifactId>telegrambots</artifactId>
+            <version>${telegrambots.version}</version>
         </dependency>
+
         <dependency>
-            <groupId>org.glassfish.jaxb</groupId>
-            <artifactId>jaxb-runtime</artifactId>
-            <version>4.0.0</version>
+            <groupId>org.telegram</groupId>
+            <artifactId>telegrambots-spring-boot-starter</artifactId>
+            <version>${telegrambots.version}</version>
         </dependency>
     </dependencies>
 
@@ -74,7 +76,7 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
-                <version>${spring-boot.version}</version>
+                <version>${spring.boot.version}</version>
                 <executions>
                     <execution>
                         <goals>
@@ -82,12 +84,9 @@
                         </goals>
                     </execution>
                 </executions>
-                <configuration>
-                    <mainClass>org.example.YogaBotApplication</mainClass>
-                </configuration>
             </plugin>
 
-            <!-- Compiler plugin -->
+            <!-- Compiler Plugin -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -99,4 +98,5 @@
             </plugin>
         </plugins>
     </build>
+
 </project>
