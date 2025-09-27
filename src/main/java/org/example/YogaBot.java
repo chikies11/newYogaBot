@@ -2,6 +2,7 @@ package org.example;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import jakarta.annotation.PostConstruct;
 import org.telegram.telegrambots.bots.TelegramWebhookBot;
 import org.telegram.telegrambots.meta.api.methods.BotApiMethod;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
@@ -33,11 +34,12 @@ public class YogaBot extends TelegramWebhookBot {
     @Value("${ADMIN_ID}")
     private String adminId;
 
-    // Хранение подписок в памяти
+    // Подписки в памяти
     private final Map<Long, Boolean> subscriptions = new HashMap<>();
 
-    // Инициализация БД при создании бина
-    public YogaBot() {
+    // Инициализация БД после того, как Spring установил поля
+    @PostConstruct
+    public void postConstruct() {
         initDb();
     }
 
@@ -52,27 +54,23 @@ public class YogaBot extends TelegramWebhookBot {
 
     @Override
     public BotApiMethod<?> onWebhookUpdateReceived(Update update) {
-        try {
-            if (update.hasMessage() && update.getMessage().hasText()) {
-                Long chatId = update.getMessage().getChatId();
-                String text = update.getMessage().getText();
-                Long userId = update.getMessage().getFrom().getId();
+        if (update.hasMessage() && update.getMessage().hasText()) {
+            Long chatId = update.getMessage().getChatId();
+            String text = update.getMessage().getText();
+            Long userId = update.getMessage().getFrom().getId();
 
-                switch (text) {
-                    case "/start" -> sendMsg(chatId, "Привет! Я YogaBot 🧘");
-                    case "🔔 Уведомления" -> toggleSubscription(chatId, userId);
-                    case "📖 Расписание" -> showSchedule(chatId);
-                    default -> sendMsg(chatId, "Команда не распознана");
-                }
+            switch (text) {
+                case "/start" -> sendMsg(chatId, "Привет! Я YogaBot 🧘");
+                case "🔔 Уведомления" -> toggleSubscription(chatId, userId);
+                case "📖 Расписание" -> showSchedule(chatId);
+                default -> sendMsg(chatId, "Команда не распознана");
             }
-        } catch (Exception e) {
-            e.printStackTrace();
         }
-        return null; // для Webhook нужно вернуть BotApiMethod<?>, null если не нужно отвечать
+        return null; // null, если не нужно отправлять объект BotApiMethod
     }
 
     /** Отправка сообщения */
-    public void sendMsg(Long chatId, String text) {
+    private void sendMsg(Long chatId, String text) {
         SendMessage message = new SendMessage(chatId.toString(), text);
         try {
             execute(message);
@@ -87,21 +85,21 @@ public class YogaBot extends TelegramWebhookBot {
             Statement st = conn.createStatement();
             st.executeUpdate("""
                 CREATE TABLE IF NOT EXISTS lessons (
-                    id SERIAL PRIMARY KEY,
+                    id BIGSERIAL PRIMARY KEY,
                     datetime TIMESTAMP NOT NULL,
                     title TEXT NOT NULL
                 )
             """);
             st.executeUpdate("""
                 CREATE TABLE IF NOT EXISTS signups (
-                    id SERIAL PRIMARY KEY,
-                    lesson_id INT REFERENCES lessons(id) ON DELETE CASCADE,
+                    id BIGSERIAL PRIMARY KEY,
+                    lesson_id BIGINT REFERENCES lessons(id) ON DELETE CASCADE,
                     username TEXT NOT NULL
                 )
             """);
             st.executeUpdate("""
                 CREATE TABLE IF NOT EXISTS subscriptions (
-                    id SERIAL PRIMARY KEY,
+                    id BIGSERIAL PRIMARY KEY,
                     user_id BIGINT UNIQUE NOT NULL
                 )
             """);
@@ -142,4 +140,3 @@ public class YogaBot extends TelegramWebhookBot {
         return adminId != null && adminId.equals(userId.toString());
     }
 }
-

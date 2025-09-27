@@ -1,5 +1,6 @@
 package org.example;
 
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.telegram.telegrambots.meta.api.objects.Update;
 
@@ -13,7 +14,8 @@ public class WebhookController {
     }
 
     @PostMapping("/")
-    public void onUpdateReceived(@RequestBody Update update) {
+    public ResponseEntity<Void> onUpdateReceived(@RequestBody Update update) {
         bot.onWebhookUpdateReceived(update);
+        return ResponseEntity.ok().build();
     }
 }
