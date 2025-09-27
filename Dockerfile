@@ -13,16 +13,8 @@ RUN mvn clean package -DskipTests
 FROM eclipse-temurin:17-jre
 WORKDIR /app
 
-# Копируем fat-jar
-COPY --from=build /app/target/yogabot-1.0-SNAPSHOT.jar app.jar
-
-# Пробрасываем переменные окружения
-ENV BOT_USERNAME=${BOT_USERNAME}
-ENV BOT_TOKEN=${BOT_TOKEN}
-ENV ADMIN_ID=${ADMIN_ID}
-ENV CHANNEL_ID=${CHANNEL_ID}
-ENV DATABASE_URL=${DATABASE_URL}
-ENV BOT_PATH=/
+# Копируем любой jar из target (Spring Boot кладет только один fat-jar)
+COPY --from=build /app/target/*.jar app.jar
 
 # Запуск
 ENTRYPOINT ["java", "-jar", "app.jar"]
