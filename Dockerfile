@@ -13,8 +13,15 @@ RUN mvn clean package -DskipTests
 FROM eclipse-temurin:17-jre
 WORKDIR /app
 
-# Копируем любой jar из target (Spring Boot кладет только один fat-jar)
+# Копируем любой JAR из target и называем его app.jar
 COPY --from=build /app/target/*.jar app.jar
+
+# Пробрасываем переменные окружения
+ENV BOT_USERNAME=${BOT_USERNAME}
+ENV BOT_TOKEN=${BOT_TOKEN}
+ENV ADMIN_ID=${ADMIN_ID}
+ENV CHANNEL_ID=${CHANNEL_ID}
+ENV BOT_PATH=/
 
 # Запуск
 ENTRYPOINT ["java", "-jar", "app.jar"]
