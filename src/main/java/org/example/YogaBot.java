@@ -16,22 +16,22 @@ import java.util.Map;
 @Component
 public class YogaBot extends TelegramWebhookBot {
 
-    @Value("${BOT_USERNAME}")
+    @Value("${bot.username}")
     private String botUsername;
 
-    @Value("${BOT_TOKEN}")
+    @Value("${bot.token}")
     private String botToken;
 
     @Value("${BOT_PATH:/}")
     private String botPath;
 
-    @Value("${DATABASE_URL}")
+    @Value("${spring.datasource.url}")
     private String dbUrl;
 
-    @Value("${CHANNEL_ID}")
+    @Value("${app.channelId}")
     private String channelId;
 
-    @Value("${ADMIN_ID}")
+    @Value("${app.adminId}")
     private String adminId;
 
     // Подписки в памяти
