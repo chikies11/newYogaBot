@@ -68,14 +68,16 @@ public class YogaBot extends TelegramWebhookBot {
 
     @Override
     public BotApiMethod<?> onWebhookUpdateReceived(Update update) {
-        System.out.println("📨 Получено обновление: " + update.getUpdateId());
+        System.out.println("🔄 Начало обработки update: " + update.getUpdateId());
 
         if (update.hasMessage() && update.getMessage().hasText()) {
             Long chatId = update.getMessage().getChatId();
             String text = update.getMessage().getText();
             Long userId = update.getMessage().getFrom().getId();
 
-            System.out.println("💬 Сообщение от " + userId + ": " + text);
+            System.out.println("💬 Обработка сообщения от " + userId + ": " + text);
+            System.out.println("🔧 Bot username: " + botUsername);
+            System.out.println("🔧 Bot token length: " + (botToken != null ? botToken.length() : "null"));
 
             switch (text) {
                 case "/start" -> {
@@ -85,9 +87,14 @@ public class YogaBot extends TelegramWebhookBot {
                 case "/schedule", "📖 Расписание" -> showSchedule(chatId);
                 default -> sendMsg(chatId, "Команда не распознана. Используйте:\n/start - начать работу\n/schedule - расписание\n/notifications - уведомления");
             }
-        }
-        return null;
+
+        }else {
+        System.out.println("⚠️ Update не содержит текстового сообщения");
     }
+
+    System.out.println("✅ Завершение обработки update: " + update.getUpdateId());
+    return null;
+}
 
     private void sendMsg(Long chatId, String text) {
         if (chatId == null) {
