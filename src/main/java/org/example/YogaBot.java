@@ -16,22 +16,22 @@ import java.util.Map;
 @Component
 public class YogaBot extends TelegramWebhookBot {
 
-    @Value("${bot.username}")
+    @Value("${bot.username:}")
     private String botUsername;
 
-    @Value("${bot.token}")
+    @Value("${bot.token:}")
     private String botToken;
 
-    @Value("${bot.path:/}")
+    @Value("${bot.path:}")
     private String botPath;
 
-    @Value("${spring.datasource.url}")
+    @Value("${spring.datasource.url:}")
     private String dbUrl;
 
-    @Value("${app.channelId}")
+    @Value("${app.channelId:}")
     private String channelId;
 
-    @Value("${app.adminId}")
+    @Value("${app.adminId:}")
     private String adminId;
 
     private final Map<Long, Boolean> subscriptions = new HashMap<>();
@@ -39,9 +39,15 @@ public class YogaBot extends TelegramWebhookBot {
     @PostConstruct
     public void postConstruct() {
         System.out.println("🔄 Инициализация YogaBot...");
-        System.out.println("Database URL: " + dbUrl);
+        System.out.println("Database URL: " + (dbUrl != null ? dbUrl.substring(0, Math.min(dbUrl.length(), 50)) + "..." : "null"));
         System.out.println("Bot Username: " + botUsername);
-        initDb();
+        System.out.println("Bot Token: " + (botToken != null ? "***" + botToken.substring(Math.max(0, botToken.length() - 5)) : "null"));
+
+        if (dbUrl != null && !dbUrl.isEmpty()) {
+            initDb();
+        } else {
+            System.out.println("⚠️ Database URL не настроен, пропускаем инициализацию БД");
+        }
         System.out.println("✅ YogaBot инициализирован");
     }
 
@@ -57,7 +63,7 @@ public class YogaBot extends TelegramWebhookBot {
 
     @Override
     public String getBotPath() {
-        return botPath;
+        return botPath != null && !botPath.isEmpty() ? botPath : "/";
     }
 
     @Override
@@ -73,10 +79,10 @@ public class YogaBot extends TelegramWebhookBot {
 
             switch (text) {
                 case "/start" -> {
-                    sendMsg(chatId, "Привет! Я YogaBot 🧘\n\nДоступные команды:\n📖 Расписание - показать расписание занятий\n🔔 Уведомления - включить/выключить уведомления");
+                    sendMsg(chatId, "Привет! Я YogaBot 🧘\n\nДоступные команды:\n/start - начать работу\n/schedule - показать расписание\n/notifications - управление уведомлениями");
                 }
-                case "🔔 Уведомления", "/notifications" -> toggleSubscription(chatId, userId);
-                case "📖 Расписание", "/schedule" -> showSchedule(chatId);
+                case "/notifications", "🔔 Уведомления" -> toggleSubscription(chatId, userId);
+                case "/schedule", "📖 Расписание" -> showSchedule(chatId);
                 default -> sendMsg(chatId, "Команда не распознана. Используйте:\n/start - начать работу\n/schedule - расписание\n/notifications - уведомления");
             }
         }
@@ -84,6 +90,11 @@ public class YogaBot extends TelegramWebhookBot {
     }
 
     private void sendMsg(Long chatId, String text) {
+        if (chatId == null) {
+            System.err.println("❌ chatId is null");
+            return;
+        }
+
         SendMessage message = new SendMessage(chatId.toString(), text);
         try {
             execute(message);
@@ -95,10 +106,14 @@ public class YogaBot extends TelegramWebhookBot {
 
     private void initDb() {
         System.out.println("🔄 Инициализация базы данных...");
-        try (Connection conn = DriverManager.getConnection(dbUrl)) {
+
+        // Конвертируем URL если нужно
+        String jdbcUrl = convertToJdbcUrl(dbUrl);
+        System.out.println("🔗 Используем JDBC URL: " + jdbcUrl);
+
+        try (Connection conn = DriverManager.getConnection(jdbcUrl)) {
             Statement st = conn.createStatement();
 
-            // Таблица занятий
             st.executeUpdate("""
                 CREATE TABLE IF NOT EXISTS lessons (
                     id BIGSERIAL PRIMARY KEY,
@@ -107,7 +122,6 @@ public class YogaBot extends TelegramWebhookBot {
                 )
             """);
 
-            // Таблица записей
             st.executeUpdate("""
                 CREATE TABLE IF NOT EXISTS signups (
                     id BIGSERIAL PRIMARY KEY,
@@ -117,7 +131,6 @@ public class YogaBot extends TelegramWebhookBot {
                 )
             """);
 
-            // Таблица подписок
             st.executeUpdate("""
                 CREATE TABLE IF NOT EXISTS subscriptions (
                     id BIGSERIAL PRIMARY KEY,
@@ -126,15 +139,15 @@ public class YogaBot extends TelegramWebhookBot {
                 )
             """);
 
-            // Добавляем тестовые данные, если таблица пуста
+            // Проверяем и добавляем тестовые данные
             ResultSet rs = st.executeQuery("SELECT COUNT(*) as count FROM lessons");
             rs.next();
             if (rs.getInt("count") == 0) {
                 st.executeUpdate("""
                     INSERT INTO lessons (datetime, title) VALUES 
-                    (CURRENT_TIMESTAMP + INTERVAL '1 day', 'Утренняя йога'),
-                    (CURRENT_TIMESTAMP + INTERVAL '2 days', 'Вечерняя медитация'),
-                    (CURRENT_TIMESTAMP + INTERVAL '3 days', 'Хатха йога')
+                    (NOW() + INTERVAL '1 day', 'Утренняя йога'),
+                    (NOW() + INTERVAL '2 days', 'Вечерняя медитация'),
+                    (NOW() + INTERVAL '3 days', 'Хатха йога')
                 """);
                 System.out.println("✅ Добавлены тестовые занятия");
             }
@@ -146,9 +159,23 @@ public class YogaBot extends TelegramWebhookBot {
         }
     }
 
+    private String convertToJdbcUrl(String url) {
+        if (url == null || url.isEmpty()) {
+            return url;
+        }
+        if (url.startsWith("postgresql://")) {
+            return url.replace("postgresql://", "jdbc:postgresql://");
+        }
+        return url;
+    }
+
     private void toggleSubscription(Long chatId, Long userId) {
-        try (Connection conn = DriverManager.getConnection(dbUrl)) {
-            // Проверяем, подписан ли уже пользователь
+        if (dbUrl == null || dbUrl.isEmpty()) {
+            sendMsg(chatId, "❌ База данных не настроена");
+            return;
+        }
+
+        try (Connection conn = DriverManager.getConnection(convertToJdbcUrl(dbUrl))) {
             PreparedStatement checkStmt = conn.prepareStatement(
                     "SELECT id FROM subscriptions WHERE user_id = ?"
             );
@@ -156,7 +183,6 @@ public class YogaBot extends TelegramWebhookBot {
             ResultSet rs = checkStmt.executeQuery();
 
             if (rs.next()) {
-                // Отписываем
                 PreparedStatement deleteStmt = conn.prepareStatement(
                         "DELETE FROM subscriptions WHERE user_id = ?"
                 );
@@ -165,7 +191,6 @@ public class YogaBot extends TelegramWebhookBot {
                 sendMsg(chatId, "🔕 Уведомления отключены");
                 System.out.println("✅ Пользователь " + userId + " отписался");
             } else {
-                // Подписываем
                 PreparedStatement insertStmt = conn.prepareStatement(
                         "INSERT INTO subscriptions (user_id) VALUES (?)"
                 );
@@ -181,7 +206,12 @@ public class YogaBot extends TelegramWebhookBot {
     }
 
     private void showSchedule(Long chatId) {
-        try (Connection conn = DriverManager.getConnection(dbUrl)) {
+        if (dbUrl == null || dbUrl.isEmpty()) {
+            sendMsg(chatId, "❌ База данных не настроена");
+            return;
+        }
+
+        try (Connection conn = DriverManager.getConnection(convertToJdbcUrl(dbUrl))) {
             Statement st = conn.createStatement();
             ResultSet rs = st.executeQuery("""
                 SELECT id, datetime, title 
