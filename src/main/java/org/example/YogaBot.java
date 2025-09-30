@@ -171,17 +171,19 @@ public class YogaBot extends TelegramWebhookBot {
             System.err.println("❌ Database URL is null or empty");
             return url;
         }
+
         System.out.println("🔗 Original URL: " + url);
 
         if (url.startsWith("postgresql://")) {
-            String jdbcUrl = url.replace("postgresql://", "jdbc:postgresql://");
-            System.out.println("🔗 Converted to JDBC URL: " + jdbcUrl);
+            // Правильное преобразование для Render
+            String jdbcUrl = "jdbc:postgresql://" + url.substring("postgresql://".length());
+            System.out.println("✅ Converted to JDBC URL: " + jdbcUrl);
             return jdbcUrl;
         } else if (url.startsWith("jdbc:postgresql://")) {
-            System.out.println("🔗 Already JDBC URL: " + url);
+            System.out.println("✅ Already JDBC URL");
             return url;
         } else {
-            System.err.println("❌ Unknown database URL format: " + url);
+            System.err.println("❌ Unknown database URL format");
             return url;
         }
     }
