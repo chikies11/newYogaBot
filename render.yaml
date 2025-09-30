@@ -21,17 +21,9 @@ services:
         sync: false
       - key: CHANNEL_ID
         sync: false
-      - key: JDBC_DATABASE_URL
+      - key: DATABASE_URL
         fromDatabase:
           name: yogabot-db
           property: connectionString
-      - key: DATABASE_USER
-        fromDatabase:
-          name: yogabot-db
-          property: user
-      - key: DATABASE_PASSWORD
-        fromDatabase:
-          name: yogabot-db
-          property: password
 
     healthCheckPath: /

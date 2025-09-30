@@ -161,12 +161,22 @@ public class YogaBot extends TelegramWebhookBot {
 
     private String convertToJdbcUrl(String url) {
         if (url == null || url.isEmpty()) {
+            System.err.println("❌ Database URL is null or empty");
             return url;
         }
+        System.out.println("🔗 Original URL: " + url);
+
         if (url.startsWith("postgresql://")) {
-            return url.replace("postgresql://", "jdbc:postgresql://");
+            String jdbcUrl = url.replace("postgresql://", "jdbc:postgresql://");
+            System.out.println("🔗 Converted to JDBC URL: " + jdbcUrl);
+            return jdbcUrl;
+        } else if (url.startsWith("jdbc:postgresql://")) {
+            System.out.println("🔗 Already JDBC URL: " + url);
+            return url;
+        } else {
+            System.err.println("❌ Unknown database URL format: " + url);
+            return url;
         }
-        return url;
     }
 
     private void toggleSubscription(Long chatId, Long userId) {
