@@ -25,5 +25,14 @@ services:
         fromDatabase:
           name: yogabot-db
           property: connectionString
+      # Добавьте эти переменные для доступа к username и password
+      - key: DATABASE_USER
+        fromDatabase:
+          name: yogabot-db
+          property: user
+      - key: DATABASE_PASSWORD
+        fromDatabase:
+          name: yogabot-db
+          property: password
 
     healthCheckPath: /
