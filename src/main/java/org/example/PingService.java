@@ -29,6 +29,19 @@ public class PingService {
         }
     }
 
+    @Scheduled(fixedRate = 120000)
+    public void pingMultipleEndpoints() {
+        try {
+            String[] endpoints = {"/", "/health", "/status"};
+            for (String endpoint : endpoints) {
+                String response = restTemplate.getForObject(appUrl + endpoint, String.class);
+                System.out.println("✅ Ping " + endpoint + ": " + (response != null ? "OK" : "FAIL"));
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Multi-ping failed: " + e.getMessage());
+        }
+    }
+
     // Health check каждые 2 минуты
     @Scheduled(fixedRate = 120000)
     public void pingHealth() {
