@@ -164,6 +164,7 @@ public class YogaBot extends TelegramWebhookBot {
             case "📅 Расписание" -> showScheduleMenu(chatId);
             case "🔔 Уведомления" -> toggleNotifications(chatId);
             case "📋 Запись" -> showRegistrations(chatId);
+            case "🧪 Тест уведомлений" -> sendTestNotificationToAdmin(chatId); // ЭТА СТРОКА ДОЛЖНА БЫТЬ!
             case "🚫 Отмена" -> {
                 userStates.remove(userId);
                 showMainMenu(chatId);
@@ -420,8 +421,13 @@ public class YogaBot extends TelegramWebhookBot {
         KeyboardRow row2 = new KeyboardRow();
         row2.add("📋 Запись");
 
+        // Временная кнопка для теста - УБЕДИТЕСЬ ЧТО ОНА ЕСТЬ!
+        KeyboardRow row3 = new KeyboardRow();
+        row3.add("🧪 Тест уведомлений");
+
         keyboard.add(row1);
         keyboard.add(row2);
+        keyboard.add(row3); // Добавляем тестовую строку
 
         keyboardMarkup.setKeyboard(keyboard);
         return keyboardMarkup;
@@ -877,6 +883,16 @@ public class YogaBot extends TelegramWebhookBot {
         }
 
         System.out.println("✅ Тестовые уведомления отправлены с кнопками отмены!");
+    }
+
+    // Добавьте этот метод если его нет
+    private void sendTestNotificationToAdmin(Long chatId) {
+        try {
+            sendTestNotification();
+            sendMsg(chatId, "✅ Тестовые уведомления отправлены в канал! Проверьте @yoga_yollayo11");
+        } catch (Exception e) {
+            sendMsg(chatId, "❌ Ошибка отправки тестовых уведомлений: " + e.getMessage());
+        }
     }
 
     // Добавьте этот метод для принудительной отправки уведомлений
