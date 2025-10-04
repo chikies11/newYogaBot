@@ -59,7 +59,6 @@ public class YogaBot extends TelegramWebhookBot {
         System.out.println("Admin ID: " + adminId);
         System.out.println("Channel ID: " + channelId);
 
-        // Инициализируем фиксированное расписание
         initializeFixedSchedule();
 
         if (dbUrl != null && !dbUrl.isEmpty() && dbUsername != null && dbPassword != null) {
@@ -164,7 +163,7 @@ public class YogaBot extends TelegramWebhookBot {
             case "📅 Расписание" -> showScheduleMenu(chatId);
             case "🔔 Уведомления" -> toggleNotifications(chatId);
             case "📋 Запись" -> showRegistrations(chatId);
-            case "🧪 Тест уведомлений" -> sendTestNotificationToAdmin(chatId); // ЭТА СТРОКА ДОЛЖНА БЫТЬ!
+            case "🧪 Тест уведомлений" -> sendTestNotificationToAdmin(chatId);
             case "🚫 Отмена" -> {
                 userStates.remove(userId);
                 showMainMenu(chatId);
@@ -181,213 +180,23 @@ public class YogaBot extends TelegramWebhookBot {
         System.out.println("🔘 Обработка callback: " + data);
 
         switch (data) {
-            case "add_morning" -> showDateSelection(chatId, "morning");
-            case "add_evening" -> showDateSelection(chatId, "evening");
-            case "delete_morning" -> showCustomLessonsForDeletion(chatId, "morning");
-            case "delete_evening" -> showCustomLessonsForDeletion(chatId, "evening");
+            case "schedule_morning" -> showDaySelection(chatId, "morning");
+            case "schedule_evening" -> showDaySelection(chatId, "evening");
             case "back_to_schedule" -> showScheduleMenu(chatId);
             case "back_to_main" -> showMainMenu(chatId);
             default -> {
-                if (data.startsWith("select_date_")) {
-                    handleDateSelection(chatId, data);
-                } else if (data.startsWith("delete_lesson_")) {
-                    deleteLesson(chatId, data.substring(14), messageId);
+                if (data.startsWith("day_")) {
+                    handleDaySelection(chatId, data);
+                } else if (data.startsWith("edit_")) {
+                    handleEditLesson(chatId, data);
+                } else if (data.startsWith("delete_")) {
+                    handleDeleteLesson(chatId, data, messageId);
                 } else if (data.startsWith("signup_")) {
                     handleUserSignup(callbackQuery);
                 } else if (data.startsWith("cancel_")) {
-                    handleUserCancel(callbackQuery); // Добавьте эту строку
+                    handleUserCancel(callbackQuery);
                 }
             }
-        }
-    }
-
-    private void handleUserCancel(org.telegram.telegrambots.meta.api.objects.CallbackQuery callbackQuery) {
-        String data = callbackQuery.getData();
-        Long userId = callbackQuery.getFrom().getId();
-        String username = callbackQuery.getFrom().getUserName();
-        String firstName = callbackQuery.getFrom().getFirstName();
-
-        String displayName = username != null ? "@" + username : firstName;
-        String lessonType = data.substring(7); // "cancel_morning" -> "morning"
-
-        LocalDate tomorrow = LocalDate.now().plusDays(1);
-
-        try (Connection conn = getConnection()) {
-            // Проверяем, записан ли пользователь
-            PreparedStatement checkStmt = conn.prepareStatement(
-                    "SELECT id FROM registrations WHERE user_id = ? AND lesson_date = ? AND lesson_type = ?"
-            );
-            checkStmt.setLong(1, userId);
-            checkStmt.setDate(2, Date.valueOf(tomorrow));
-            checkStmt.setString(3, lessonType);
-            ResultSet rs = checkStmt.executeQuery();
-
-            if (rs.next()) {
-                // Удаляем запись пользователя
-                PreparedStatement deleteStmt = conn.prepareStatement(
-                        "DELETE FROM registrations WHERE user_id = ? AND lesson_date = ? AND lesson_type = ?"
-                );
-                deleteStmt.setLong(1, userId);
-                deleteStmt.setDate(2, Date.valueOf(tomorrow));
-                deleteStmt.setString(3, lessonType);
-                int deletedRows = deleteStmt.executeUpdate();
-
-                if (deletedRows > 0) {
-                    String answer = "❌ Запись на " + (lessonType.equals("morning") ? "утреннюю" : "вечернюю") + " практику отменена!";
-                    answerCallbackQuery(callbackQuery.getId(), answer);
-                    System.out.println("✅ Пользователь " + displayName + " отменил запись на " + lessonType);
-                } else {
-                    answerCallbackQuery(callbackQuery.getId(), "❌ Не удалось отменить запись");
-                }
-            } else {
-                answerCallbackQuery(callbackQuery.getId(), "❌ Вы не записаны на это занятие!");
-            }
-        } catch (SQLException e) {
-            System.err.println("❌ Ошибка отмены записи пользователя: " + e.getMessage());
-            answerCallbackQuery(callbackQuery.getId(), "❌ Произошла ошибка при отмене записи");
-        }
-    }
-
-    private void showDateSelection(Long chatId, String lessonType) {
-        String typeText = lessonType.equals("morning") ? "утреннюю" : "вечернюю";
-        String text = "📅 Выберите дату для " + typeText + " практики:";
-
-        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
-        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-
-        LocalDate today = LocalDate.now();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd.MM");
-
-        // Создаем кнопки на 7 дней вперед
-        for (int i = 0; i < 7; i++) {
-            LocalDate date = today.plusDays(i);
-            String dateText = date.format(formatter);
-            String dayName = getRussianDayName(date.getDayOfWeek());
-
-            List<InlineKeyboardButton> row = new ArrayList<>();
-            String callbackData = "select_date_" + date + "_" + lessonType;
-            row.add(createInlineButton(dateText + " (" + dayName + ")", callbackData));
-            rows.add(row);
-        }
-
-        // Кнопка назад
-        List<InlineKeyboardButton> backRow = new ArrayList<>();
-        backRow.add(createInlineButton("🔙 Назад", "back_to_schedule"));
-        rows.add(backRow);
-
-        markup.setKeyboard(rows);
-
-        SendMessage message = new SendMessage(chatId.toString(), text);
-        message.setReplyMarkup(markup);
-
-        try {
-            execute(message);
-        } catch (TelegramApiException e) {
-            System.err.println("❌ Ошибка отправки выбора даты: " + e.getMessage());
-        }
-    }
-
-    private String getRussianDayName(DayOfWeek dayOfWeek) {
-        switch (dayOfWeek) {
-            case MONDAY: return "Пн";
-            case TUESDAY: return "Вт";
-            case WEDNESDAY: return "Ср";
-            case THURSDAY: return "Чт";
-            case FRIDAY: return "Пт";
-            case SATURDAY: return "Сб";
-            case SUNDAY: return "Вс";
-            default: return "";
-        }
-    }
-
-    private void handleDateSelection(Long chatId, String data) {
-        // data format: "select_date_2025-10-05_morning"
-        String[] parts = data.split("_");
-        LocalDate date = LocalDate.parse(parts[2]);
-        String lessonType = parts[3];
-
-        userStates.put(chatId, "adding_" + date + "_" + lessonType);
-
-        String typeText = lessonType.equals("morning") ? "утреннюю" : "вечернюю";
-        String dateText = date.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"));
-        String text = "✍️ Введите описание для " + typeText + " практики на " + dateText + ":\n\nПример: *Майсор класс*\n\nИли отправьте '🚫 Отмена' для отмены";
-
-        SendMessage message = new SendMessage(chatId.toString(), text);
-        message.setParseMode("Markdown");
-        message.setReplyMarkup(createCancelKeyboard());
-
-        try {
-            execute(message);
-        } catch (TelegramApiException e) {
-            System.err.println("❌ Ошибка запроса описания: " + e.getMessage());
-        }
-    }
-
-    private void handleUserSignup(org.telegram.telegrambots.meta.api.objects.CallbackQuery callbackQuery) {
-        String data = callbackQuery.getData();
-        Long userId = callbackQuery.getFrom().getId();
-        String username = callbackQuery.getFrom().getUserName();
-        String firstName = callbackQuery.getFrom().getFirstName();
-
-        String displayName = username != null ? "@" + username : firstName;
-        String lessonType = data.substring(7); // "signup_morning" -> "morning"
-
-        LocalDate tomorrow = LocalDate.now().plusDays(1);
-
-        try (Connection conn = getConnection()) {
-            // Проверяем, не записан ли уже пользователь
-            PreparedStatement checkStmt = conn.prepareStatement(
-                    "SELECT id FROM registrations WHERE user_id = ? AND lesson_date = ? AND lesson_type = ?"
-            );
-            checkStmt.setLong(1, userId);
-            checkStmt.setDate(2, Date.valueOf(tomorrow));
-            checkStmt.setString(3, lessonType);
-            ResultSet rs = checkStmt.executeQuery();
-
-            if (!rs.next()) {
-                // Записываем пользователя
-                PreparedStatement insertStmt = conn.prepareStatement(
-                        "INSERT INTO registrations (user_id, username, display_name, lesson_date, lesson_type) VALUES (?, ?, ?, ?, ?)"
-                );
-                insertStmt.setLong(1, userId);
-                insertStmt.setString(2, username);
-                insertStmt.setString(3, displayName);
-                insertStmt.setDate(4, Date.valueOf(tomorrow));
-                insertStmt.setString(5, lessonType);
-                insertStmt.executeUpdate();
-
-                String answer = "✅ Вы записаны на " + (lessonType.equals("morning") ? "утреннюю" : "вечернюю") + " практику!";
-                answerCallbackQuery(callbackQuery.getId(), answer);
-            } else {
-                answerCallbackQuery(callbackQuery.getId(), "❌ Вы уже записаны на это занятие!");
-            }
-        } catch (SQLException e) {
-            System.err.println("❌ Ошибка записи пользователя: " + e.getMessage());
-            answerCallbackQuery(callbackQuery.getId(), "❌ Произошла ошибка при записи");
-        }
-    }
-
-    private void answerCallbackQuery(String callbackQueryId, String text) {
-        try {
-            org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery answer = new org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery();
-            answer.setCallbackQueryId(callbackQueryId);
-            answer.setText(text);
-            answer.setShowAlert(false);
-            execute(answer);
-        } catch (TelegramApiException e) {
-            System.err.println("❌ Ошибка ответа на callback: " + e.getMessage());
-        }
-    }
-
-    private void handleState(Long chatId, String text, Long userId) {
-        String state = userStates.get(userId);
-
-        if (state != null && state.startsWith("adding_")) {
-            String[] parts = state.split("_");
-            LocalDate date = LocalDate.parse(parts[1]);
-            String lessonType = parts[2];
-            addLesson(chatId, text, date, lessonType);
-            userStates.remove(userId);
         }
     }
 
@@ -421,13 +230,12 @@ public class YogaBot extends TelegramWebhookBot {
         KeyboardRow row2 = new KeyboardRow();
         row2.add("📋 Запись");
 
-        // Временная кнопка для теста - УБЕДИТЕСЬ ЧТО ОНА ЕСТЬ!
         KeyboardRow row3 = new KeyboardRow();
         row3.add("🧪 Тест уведомлений");
 
         keyboard.add(row1);
         keyboard.add(row2);
-        keyboard.add(row3); // Добавляем тестовую строку
+        keyboard.add(row3);
 
         keyboardMarkup.setKeyboard(keyboard);
         return keyboardMarkup;
@@ -435,27 +243,19 @@ public class YogaBot extends TelegramWebhookBot {
 
     private void showScheduleMenu(Long chatId) {
         String scheduleText = getWeeklySchedule();
-        String text = "📅 *Расписание на неделю:*\n\n" + scheduleText + "\n\nВыберите действие:";
+        String text = "📅 *Расписание на неделю:*\n\n" + scheduleText + "\n\nВыберите раздел для управления:";
 
         InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
 
-        // Кнопки добавления
-        List<InlineKeyboardButton> addRow = new ArrayList<>();
-        addRow.add(createInlineButton("➕ Утро", "add_morning"));
-        addRow.add(createInlineButton("➕ Вечер", "add_evening"));
+        List<InlineKeyboardButton> timeRow = new ArrayList<>();
+        timeRow.add(createInlineButton("🌅 Утро", "schedule_morning"));
+        timeRow.add(createInlineButton("🌇 Вечер", "schedule_evening"));
 
-        // Кнопки удаления
-        List<InlineKeyboardButton> deleteRow = new ArrayList<>();
-        deleteRow.add(createInlineButton("🗑️ Утро", "delete_morning"));
-        deleteRow.add(createInlineButton("🗑️ Вечер", "delete_evening"));
-
-        // Кнопка назад
         List<InlineKeyboardButton> backRow = new ArrayList<>();
         backRow.add(createInlineButton("🔙 Назад", "back_to_main"));
 
-        rows.add(addRow);
-        rows.add(deleteRow);
+        rows.add(timeRow);
         rows.add(backRow);
         markup.setKeyboard(rows);
 
@@ -475,9 +275,6 @@ public class YogaBot extends TelegramWebhookBot {
         LocalDate today = LocalDate.now();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("EEEE (dd.MM)");
 
-        // Загружаем кастомные занятия из БД
-        Map<LocalDate, Map<String, String>> customLessons = loadCustomLessons();
-
         for (int i = 0; i < 7; i++) {
             LocalDate date = today.plusDays(i);
             DayOfWeek dayOfWeek = date.getDayOfWeek();
@@ -486,18 +283,8 @@ public class YogaBot extends TelegramWebhookBot {
 
             sb.append("📅 *").append(dayName).append("*\n");
 
-            // Проверяем есть ли кастомное занятие
-            Map<String, String> customDay = customLessons.get(date);
-            String morningLesson = customDay != null ? customDay.get("morning") : null;
-            String eveningLesson = customDay != null ? customDay.get("evening") : null;
-
-            // Если нет кастомного занятия, используем фиксированное расписание
-            if (morningLesson == null) {
-                morningLesson = fixedSchedule.get(dayOfWeek).get("morning");
-            }
-            if (eveningLesson == null) {
-                eveningLesson = fixedSchedule.get(dayOfWeek).get("evening");
-            }
+            String morningLesson = fixedSchedule.get(dayOfWeek).get("morning");
+            String eveningLesson = fixedSchedule.get(dayOfWeek).get("evening");
 
             sb.append("🌅 *Утро:* ").append(morningLesson).append("\n");
             sb.append("🌇 *Вечер:* ").append(eveningLesson).append("\n\n");
@@ -506,30 +293,179 @@ public class YogaBot extends TelegramWebhookBot {
         return sb.toString();
     }
 
-    private Map<LocalDate, Map<String, String>> loadCustomLessons() {
-        Map<LocalDate, Map<String, String>> customLessons = new HashMap<>();
+    private void showDaySelection(Long chatId, String lessonType) {
+        String typeText = lessonType.equals("morning") ? "утренних" : "вечерних";
+        String text = "📅 Выберите день для изменения " + typeText + " занятий:";
 
-        try (Connection conn = getConnection()) {
-            Statement st = conn.createStatement();
-            ResultSet rs = st.executeQuery("""
-                SELECT lesson_date, lesson_type, description 
-                FROM lessons 
-                WHERE lesson_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
-                ORDER BY lesson_date, lesson_type
-            """);
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
 
-            while (rs.next()) {
-                LocalDate date = rs.getDate("lesson_date").toLocalDate();
-                String type = rs.getString("lesson_type");
-                String description = rs.getString("description");
+        DayOfWeek[] days = {
+                DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY,
+                DayOfWeek.THURSDAY, DayOfWeek.FRIDAY, DayOfWeek.SATURDAY, DayOfWeek.SUNDAY
+        };
 
-                customLessons.computeIfAbsent(date, k -> new HashMap<>()).put(type, description);
-            }
-        } catch (SQLException e) {
-            System.err.println("❌ Ошибка загрузки кастомных занятий: " + e.getMessage());
+        String[] dayNames = {"Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"};
+
+        for (int i = 0; i < days.length; i++) {
+            List<InlineKeyboardButton> row = new ArrayList<>();
+            String callbackData = "day_" + days[i] + "_" + lessonType;
+            row.add(createInlineButton(dayNames[i], callbackData));
+            rows.add(row);
         }
 
-        return customLessons;
+        List<InlineKeyboardButton> backRow = new ArrayList<>();
+        backRow.add(createInlineButton("🔙 Назад", "back_to_schedule"));
+        rows.add(backRow);
+
+        markup.setKeyboard(rows);
+
+        SendMessage message = new SendMessage(chatId.toString(), text);
+        message.setReplyMarkup(markup);
+
+        try {
+            execute(message);
+        } catch (TelegramApiException e) {
+            System.err.println("❌ Ошибка отправки выбора дня: " + e.getMessage());
+        }
+    }
+
+    private void handleDaySelection(Long chatId, String data) {
+        String[] parts = data.split("_");
+        DayOfWeek dayOfWeek = DayOfWeek.valueOf(parts[1]);
+        String lessonType = parts[2];
+
+        String dayName = getRussianDayNameFull(dayOfWeek);
+        String currentSchedule = fixedSchedule.get(dayOfWeek).get(lessonType);
+
+        String text = "📅 *" + dayName + " - " + (lessonType.equals("morning") ? "Утро" : "Вечер") + "*\n\n";
+        text += "📝 *Текущее расписание:*\n" + currentSchedule + "\n\n";
+        text += "Выберите действие:";
+
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+
+        List<InlineKeyboardButton> actionRow = new ArrayList<>();
+        actionRow.add(createInlineButton("✏️ Изменить", "edit_" + dayOfWeek + "_" + lessonType));
+        actionRow.add(createInlineButton("🗑️ Удалить", "delete_" + dayOfWeek + "_" + lessonType));
+
+        List<InlineKeyboardButton> backRow = new ArrayList<>();
+        backRow.add(createInlineButton("🔙 Назад", "schedule_" + lessonType));
+
+        rows.add(actionRow);
+        rows.add(backRow);
+        markup.setKeyboard(rows);
+
+        SendMessage message = new SendMessage(chatId.toString(), text);
+        message.setParseMode("Markdown");
+        message.setReplyMarkup(markup);
+
+        try {
+            execute(message);
+        } catch (TelegramApiException e) {
+            System.err.println("❌ Ошибка отправки действий для дня: " + e.getMessage());
+        }
+    }
+
+    private void handleEditLesson(Long chatId, String data) {
+        String[] parts = data.split("_");
+        DayOfWeek dayOfWeek = DayOfWeek.valueOf(parts[1]);
+        String lessonType = parts[2];
+
+        String dayName = getRussianDayNameFull(dayOfWeek);
+        String typeText = lessonType.equals("morning") ? "утреннего" : "вечернего";
+        String currentSchedule = fixedSchedule.get(dayOfWeek).get(lessonType);
+
+        userStates.put(chatId, "editing_" + dayOfWeek + "_" + lessonType);
+
+        String text = "✏️ *Изменение " + typeText + " занятия на " + dayName + "*\n\n";
+        text += "📝 *Текущее расписание:*\n" + currentSchedule + "\n\n";
+        text += "✍️ *Введите новое расписание в формате:*\n";
+        text += "`10:00 - 11:30 - Аштанга йога`\n\n";
+        text += "Или отправьте '🚫 Отмена' для отмены";
+
+        SendMessage message = new SendMessage(chatId.toString(), text);
+        message.setParseMode("Markdown");
+        message.setReplyMarkup(createCancelKeyboard());
+
+        try {
+            execute(message);
+        } catch (TelegramApiException e) {
+            System.err.println("❌ Ошибка запроса изменения: " + e.getMessage());
+        }
+    }
+
+    private void handleDeleteLesson(Long chatId, String data, Integer messageId) {
+        String[] parts = data.split("_");
+        DayOfWeek dayOfWeek = DayOfWeek.valueOf(parts[1]);
+        String lessonType = parts[2];
+
+        String dayName = getRussianDayNameFull(dayOfWeek);
+        String typeText = lessonType.equals("morning") ? "утреннее" : "вечернее";
+
+        fixedSchedule.get(dayOfWeek).put(lessonType, "Отдых");
+
+        String text = "✅ *" + typeText + " занятие на " + dayName + " удалено!*\n\n";
+        text += "Теперь в расписании указано: *Отдых*";
+
+        EditMessageText editMessage = new EditMessageText();
+        editMessage.setChatId(chatId.toString());
+        editMessage.setMessageId(messageId);
+        editMessage.setText(text);
+        editMessage.setParseMode("Markdown");
+
+        try {
+            execute(editMessage);
+        } catch (TelegramApiException e) {
+            System.err.println("❌ Ошибка обновления сообщения: " + e.getMessage());
+        }
+
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        showDaySelection(chatId, lessonType);
+    }
+
+    private void handleState(Long chatId, String text, Long userId) {
+        String state = userStates.get(userId);
+
+        if (state != null && state.startsWith("editing_")) {
+            String[] parts = state.split("_");
+            DayOfWeek dayOfWeek = DayOfWeek.valueOf(parts[1]);
+            String lessonType = parts[2];
+
+            updateLessonSchedule(chatId, text, dayOfWeek, lessonType);
+            userStates.remove(userId);
+        }
+    }
+
+    private void updateLessonSchedule(Long chatId, String newSchedule, DayOfWeek dayOfWeek, String lessonType) {
+        String dayName = getRussianDayNameFull(dayOfWeek);
+        String typeText = lessonType.equals("morning") ? "утреннее" : "вечернее";
+
+        fixedSchedule.get(dayOfWeek).put(lessonType, newSchedule);
+
+        String text = "✅ *" + typeText + " занятие на " + dayName + " обновлено!*\n\n";
+        text += "📝 *Новое расписание:*\n" + newSchedule + "\n\n";
+        text += "Изменения отразятся в уведомлениях и общем расписании.";
+
+        SendMessage message = new SendMessage(chatId.toString(), text);
+        message.setParseMode("Markdown");
+
+        try {
+            execute(message);
+        } catch (TelegramApiException e) {
+            System.err.println("❌ Ошибка отправки подтверждения: " + e.getMessage());
+        }
+
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        showDaySelection(chatId, lessonType);
     }
 
     private ReplyKeyboardMarkup createCancelKeyboard() {
@@ -545,148 +481,21 @@ public class YogaBot extends TelegramWebhookBot {
         return keyboardMarkup;
     }
 
-    private void addLesson(Long chatId, String description, LocalDate date, String lessonType) {
-        try (Connection conn = getConnection()) {
-            // Удаляем существующее занятие на эту дату
-            PreparedStatement deleteStmt = conn.prepareStatement(
-                    "DELETE FROM lessons WHERE lesson_date = ? AND lesson_type = ?"
-            );
-            deleteStmt.setDate(1, Date.valueOf(date));
-            deleteStmt.setString(2, lessonType);
-            deleteStmt.executeUpdate();
-
-            // Добавляем новое занятие
-            PreparedStatement insertStmt = conn.prepareStatement(
-                    "INSERT INTO lessons (lesson_date, lesson_type, description) VALUES (?, ?, ?)"
-            );
-            insertStmt.setDate(1, Date.valueOf(date));
-            insertStmt.setString(2, lessonType);
-            insertStmt.setString(3, description);
-            insertStmt.executeUpdate();
-
-            String typeText = lessonType.equals("morning") ? "утреннюю" : "вечернюю";
-            String dateText = date.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"));
-            String text = "✅ " + typeText + " практика на " + dateText + " добавлена!\n📝 *" + description + "*";
-
-            SendMessage message = new SendMessage(chatId.toString(), text);
-            message.setParseMode("Markdown");
-            execute(message);
-
-            showScheduleMenu(chatId);
-
-        } catch (Exception e) {
-            System.err.println("❌ Ошибка добавления занятия: " + e.getMessage());
-            sendMsg(chatId, "❌ Ошибка при добавлении занятия");
-        }
-    }
-
-    private void showCustomLessonsForDeletion(Long chatId, String lessonType) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(lessonType.equals("morning") ? "🌅 Утренние занятия для удаления:\n\n" : "🌇 Вечерние занятия для удаления:\n\n");
-
-        List<String> lessons = new ArrayList<>();
-
-        try (Connection conn = getConnection()) {
-            PreparedStatement stmt = conn.prepareStatement(
-                    "SELECT id, lesson_date, description FROM lessons WHERE lesson_type = ? AND lesson_date >= CURRENT_DATE ORDER BY lesson_date"
-            );
-            stmt.setString(1, lessonType);
-            ResultSet rs = stmt.executeQuery();
-
-            while (rs.next()) {
-                LocalDate date = rs.getDate("lesson_date").toLocalDate();
-                String description = rs.getString("description");
-                long id = rs.getLong("id");
-
-                String lessonText = date.format(DateTimeFormatter.ofPattern("dd.MM")) + " - " + description;
-                lessons.add(lessonText);
-
-                sb.append("• ").append(lessonText).append("\n");
-            }
-        } catch (SQLException e) {
-            sendMsg(chatId, "❌ Ошибка загрузки занятий");
-            return;
-        }
-
-        if (lessons.isEmpty()) {
-            sb.append("Нет кастомных занятий для удаления");
-        }
-
-        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
-        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-
-        // Создаем кнопки для каждого занятия
-        try (Connection conn = getConnection()) {
-            PreparedStatement stmt = conn.prepareStatement(
-                    "SELECT id, lesson_date, description FROM lessons WHERE lesson_type = ? AND lesson_date >= CURRENT_DATE ORDER BY lesson_date LIMIT 10"
-            );
-            stmt.setString(1, lessonType);
-            ResultSet rs = stmt.executeQuery();
-
-            while (rs.next()) {
-                long id = rs.getLong("id");
-                LocalDate date = rs.getDate("lesson_date").toLocalDate();
-                String description = rs.getString("description");
-
-                String buttonText = date.format(DateTimeFormatter.ofPattern("dd.MM")) + " - " +
-                        (description.length() > 15 ? description.substring(0, 15) + "..." : description);
-
-                List<InlineKeyboardButton> row = new ArrayList<>();
-                row.add(createInlineButton(buttonText, "delete_lesson_" + id));
-                rows.add(row);
-            }
-        } catch (SQLException e) {
-            System.err.println("❌ Ошибка создания кнопок удаления: " + e.getMessage());
-        }
-
-        // Кнопка назад
-        List<InlineKeyboardButton> backRow = new ArrayList<>();
-        backRow.add(createInlineButton("🔙 Назад", "back_to_schedule"));
-        rows.add(backRow);
-
-        markup.setKeyboard(rows);
-
-        SendMessage message = new SendMessage(chatId.toString(), sb.toString());
-        message.setReplyMarkup(markup);
-
-        try {
-            execute(message);
-        } catch (TelegramApiException e) {
-            System.err.println("❌ Ошибка отправки списка занятий: " + e.getMessage());
-        }
-    }
-
-    private void deleteLesson(Long chatId, String lessonId, Integer messageId) {
-        try (Connection conn = getConnection()) {
-            PreparedStatement stmt = conn.prepareStatement("DELETE FROM lessons WHERE id = ?");
-            stmt.setLong(1, Long.parseLong(lessonId));
-            int affectedRows = stmt.executeUpdate();
-
-            if (affectedRows > 0) {
-                // Обновляем сообщение
-                String newText = "✅ Занятие удалено!\n\n";
-                EditMessageText editMessage = new EditMessageText();
-                editMessage.setChatId(chatId.toString());
-                editMessage.setMessageId(messageId);
-                editMessage.setText(newText);
-
-                try {
-                    execute(editMessage);
-                } catch (TelegramApiException e) {
-                    System.err.println("❌ Ошибка обновления сообщения: " + e.getMessage());
-                }
-
-                showScheduleMenu(chatId);
-            }
-        } catch (Exception e) {
-            System.err.println("❌ Ошибка удаления занятия: " + e.getMessage());
-            sendMsg(chatId, "❌ Ошибка при удалении занятия");
+    private String getRussianDayNameFull(DayOfWeek dayOfWeek) {
+        switch (dayOfWeek) {
+            case MONDAY: return "Понедельник";
+            case TUESDAY: return "Вторник";
+            case WEDNESDAY: return "Среда";
+            case THURSDAY: return "Четверг";
+            case FRIDAY: return "Пятница";
+            case SATURDAY: return "Суббота";
+            case SUNDAY: return "Воскресенье";
+            default: return "";
         }
     }
 
     private void toggleNotifications(Long chatId) {
         try (Connection conn = getConnection()) {
-            // Проверяем текущее состояние уведомлений
             Statement stmt = conn.createStatement();
             ResultSet rs = stmt.executeQuery("SELECT notifications_enabled FROM bot_settings WHERE id = 1");
 
@@ -695,7 +504,6 @@ public class YogaBot extends TelegramWebhookBot {
                 currentState = rs.getBoolean("notifications_enabled");
             }
 
-            // Переключаем состояние
             PreparedStatement updateStmt = conn.prepareStatement(
                     "INSERT INTO bot_settings (id, notifications_enabled) VALUES (1, ?) ON CONFLICT (id) DO UPDATE SET notifications_enabled = ?"
             );
@@ -704,7 +512,6 @@ public class YogaBot extends TelegramWebhookBot {
             updateStmt.setBoolean(2, newState);
             updateStmt.executeUpdate();
 
-            String status = newState ? "включены" : "отключены";
             String text = newState ?
                     "🔔 *Уведомления включены!*\n\nАвтоматические уведомления будут отправляться в канал:\n• Утренние - в 12:00 МСК\n• Вечерние - в 18:00 МСК\n• Отсутствие занятий - в 14:00 МСК" :
                     "🔕 *Уведомления отключены!*\n\nАвтоматические уведомления не будут отправляться в канал.";
@@ -724,13 +531,12 @@ public class YogaBot extends TelegramWebhookBot {
         StringBuilder sb = new StringBuilder();
 
         try (Connection conn = getConnection()) {
-            // Получаем записи на завтра
             PreparedStatement stmt = conn.prepareStatement("""
-            SELECT lesson_type, display_name 
-            FROM registrations 
-            WHERE lesson_date = ? 
-            ORDER BY lesson_type, created_at
-        """);
+                SELECT lesson_type, display_name 
+                FROM registrations 
+                WHERE lesson_date = ? 
+                ORDER BY lesson_type, created_at
+            """);
             stmt.setDate(1, Date.valueOf(tomorrow));
             ResultSet rs = stmt.executeQuery();
 
@@ -746,7 +552,6 @@ public class YogaBot extends TelegramWebhookBot {
 
             sb.append("📋 *Записи на завтра (").append(tomorrow.format(DateTimeFormatter.ofPattern("dd.MM"))).append(")*\n\n");
 
-            // Утренние записи
             sb.append("🌅 *Утренняя практика:*\n");
             if (registrations.get("morning").isEmpty()) {
                 sb.append("Записей пока нет\n\n");
@@ -759,7 +564,6 @@ public class YogaBot extends TelegramWebhookBot {
                 sb.append("\n");
             }
 
-            // Вечерние записи
             sb.append("🌇 *Вечерняя практика:*\n");
             if (registrations.get("evening").isEmpty()) {
                 sb.append("Записей пока нет");
@@ -771,7 +575,6 @@ public class YogaBot extends TelegramWebhookBot {
                 }
             }
 
-            // Добавляем информацию об отменах
             sb.append("\n\n📊 *Статистика:*\n");
             sb.append("• Утренние: ").append(registrations.get("morning").size()).append(" чел.\n");
             sb.append("• Вечерние: ").append(registrations.get("evening").size()).append(" чел.\n");
@@ -782,76 +585,6 @@ public class YogaBot extends TelegramWebhookBot {
         }
 
         sendMsg(chatId, sb.toString());
-    }
-
-    // Метод для отправки уведомлений в канал (будет вызываться по расписанию)
-    public void sendDailyNotifications() {
-        if (channelId == null || channelId.isEmpty()) {
-            System.out.println("⚠️ Channel ID не настроен");
-            return;
-        }
-
-        LocalDate tomorrow = LocalDate.now().plusDays(1);
-        LocalTime now = LocalTime.now();
-
-        try (Connection conn = getConnection()) {
-            // Проверяем, включены ли уведомления
-            Statement checkStmt = conn.createStatement();
-            ResultSet settingsRs = checkStmt.executeQuery("SELECT notifications_enabled FROM bot_settings WHERE id = 1");
-
-            if (!settingsRs.next() || !settingsRs.getBoolean("notifications_enabled")) {
-                System.out.println("🔕 Уведомления отключены в настройках");
-                return;
-            }
-
-            // Получаем расписание на завтра (кастомное + фиксированное)
-            Map<String, String> tomorrowSchedule = getTomorrowSchedule(tomorrow);
-
-            String morningLesson = tomorrowSchedule.get("morning");
-            String eveningLesson = tomorrowSchedule.get("evening");
-
-            // Определяем тип уведомления по времени
-            if (now.getHour() == 12 && now.getMinute() == 0) { // 12:00 МСК - утреннее уведомление
-                sendMorningNotification(morningLesson);
-            } else if (now.getHour() == 18 && now.getMinute() == 0) { // 18:00 МСК - вечернее уведомление
-                sendEveningNotification(eveningLesson);
-            } else if (now.getHour() == 14 && now.getMinute() == 0) { // 14:00 МСК - уведомление об отсутствии занятий
-                sendNoClassesNotification(morningLesson, eveningLesson);
-            }
-
-        } catch (Exception e) {
-            System.err.println("❌ Ошибка отправки уведомлений: " + e.getMessage());
-        }
-    }
-
-    private Map<String, String> getTomorrowSchedule(LocalDate tomorrow) {
-        Map<String, String> schedule = new HashMap<>();
-        DayOfWeek dayOfWeek = tomorrow.getDayOfWeek();
-
-        // Сначала проверяем кастомные занятия
-        try (Connection conn = getConnection()) {
-            PreparedStatement stmt = conn.prepareStatement(
-                    "SELECT lesson_type, description FROM lessons WHERE lesson_date = ?"
-            );
-            stmt.setDate(1, Date.valueOf(tomorrow));
-            ResultSet rs = stmt.executeQuery();
-
-            while (rs.next()) {
-                schedule.put(rs.getString("lesson_type"), rs.getString("description"));
-            }
-        } catch (SQLException e) {
-            System.err.println("❌ Ошибка загрузки кастомного расписания: " + e.getMessage());
-        }
-
-        // Если нет кастомных занятий, используем фиксированное расписание
-        if (!schedule.containsKey("morning")) {
-            schedule.put("morning", fixedSchedule.get(dayOfWeek).get("morning"));
-        }
-        if (!schedule.containsKey("evening")) {
-            schedule.put("evening", fixedSchedule.get(dayOfWeek).get("evening"));
-        }
-
-        return schedule;
     }
 
     public void sendTestNotification() {
@@ -867,13 +600,9 @@ public class YogaBot extends TelegramWebhookBot {
         System.out.println("Утро: " + morningLesson);
         System.out.println("Вечер: " + eveningLesson);
 
-        // Тестируем разные сценарии
-
-        // 1. Тест утреннего уведомления
         System.out.println("🔔 Тест утреннего уведомления...");
         sendMorningNotification(morningLesson);
 
-        // 2. Ждем и тестируем вечернее
         try {
             Thread.sleep(2000);
             System.out.println("🔔 Тест вечернего уведомления...");
@@ -885,7 +614,6 @@ public class YogaBot extends TelegramWebhookBot {
         System.out.println("✅ Тестовые уведомления отправлены с кнопками отмены!");
     }
 
-    // Добавьте этот метод если его нет
     private void sendTestNotificationToAdmin(Long chatId) {
         try {
             sendTestNotification();
@@ -895,7 +623,6 @@ public class YogaBot extends TelegramWebhookBot {
         }
     }
 
-    // Добавьте этот метод для принудительной отправки уведомлений
     public void sendManualNotification(String type) {
         System.out.println("🔔 Ручная отправка уведомления: " + type);
 
@@ -919,6 +646,16 @@ public class YogaBot extends TelegramWebhookBot {
                 sendTestNotification();
                 break;
         }
+    }
+
+    private Map<String, String> getTomorrowSchedule(LocalDate tomorrow) {
+        Map<String, String> schedule = new HashMap<>();
+        DayOfWeek dayOfWeek = tomorrow.getDayOfWeek();
+
+        schedule.put("morning", fixedSchedule.get(dayOfWeek).get("morning"));
+        schedule.put("evening", fixedSchedule.get(dayOfWeek).get("evening"));
+
+        return schedule;
     }
 
     private void sendMorningNotification(String morningLesson) {
@@ -973,6 +710,42 @@ public class YogaBot extends TelegramWebhookBot {
         }
     }
 
+    public void sendDailyNotifications() {
+        if (channelId == null || channelId.isEmpty()) {
+            System.out.println("⚠️ Channel ID не настроен");
+            return;
+        }
+
+        LocalDate tomorrow = LocalDate.now().plusDays(1);
+        LocalTime now = LocalTime.now();
+
+        try (Connection conn = getConnection()) {
+            Statement checkStmt = conn.createStatement();
+            ResultSet settingsRs = checkStmt.executeQuery("SELECT notifications_enabled FROM bot_settings WHERE id = 1");
+
+            if (!settingsRs.next() || !settingsRs.getBoolean("notifications_enabled")) {
+                System.out.println("🔕 Уведомления отключены в настройках");
+                return;
+            }
+
+            Map<String, String> tomorrowSchedule = getTomorrowSchedule(tomorrow);
+
+            String morningLesson = tomorrowSchedule.get("morning");
+            String eveningLesson = tomorrowSchedule.get("evening");
+
+            if (now.getHour() == 12 && now.getMinute() == 0) {
+                sendMorningNotification(morningLesson);
+            } else if (now.getHour() == 18 && now.getMinute() == 0) {
+                sendEveningNotification(eveningLesson);
+            } else if (now.getHour() == 14 && now.getMinute() == 0) {
+                sendNoClassesNotification(morningLesson, eveningLesson);
+            }
+
+        } catch (Exception e) {
+            System.err.println("❌ Ошибка отправки уведомлений: " + e.getMessage());
+        }
+    }
+
     private void sendToChannel(String text) {
         sendToChannel(text, null);
     }
@@ -995,6 +768,105 @@ public class YogaBot extends TelegramWebhookBot {
             System.out.println("✅ Уведомление отправлено в канал");
         } catch (TelegramApiException e) {
             System.err.println("❌ Ошибка отправки в канал: " + e.getMessage());
+        }
+    }
+
+    private void handleUserSignup(org.telegram.telegrambots.meta.api.objects.CallbackQuery callbackQuery) {
+        String data = callbackQuery.getData();
+        Long userId = callbackQuery.getFrom().getId();
+        String username = callbackQuery.getFrom().getUserName();
+        String firstName = callbackQuery.getFrom().getFirstName();
+
+        String displayName = username != null ? "@" + username : firstName;
+        String lessonType = data.substring(7);
+
+        LocalDate tomorrow = LocalDate.now().plusDays(1);
+
+        try (Connection conn = getConnection()) {
+            PreparedStatement checkStmt = conn.prepareStatement(
+                    "SELECT id FROM registrations WHERE user_id = ? AND lesson_date = ? AND lesson_type = ?"
+            );
+            checkStmt.setLong(1, userId);
+            checkStmt.setDate(2, Date.valueOf(tomorrow));
+            checkStmt.setString(3, lessonType);
+            ResultSet rs = checkStmt.executeQuery();
+
+            if (!rs.next()) {
+                PreparedStatement insertStmt = conn.prepareStatement(
+                        "INSERT INTO registrations (user_id, username, display_name, lesson_date, lesson_type) VALUES (?, ?, ?, ?, ?)"
+                );
+                insertStmt.setLong(1, userId);
+                insertStmt.setString(2, username);
+                insertStmt.setString(3, displayName);
+                insertStmt.setDate(4, Date.valueOf(tomorrow));
+                insertStmt.setString(5, lessonType);
+                insertStmt.executeUpdate();
+
+                String answer = "✅ Вы записаны на " + (lessonType.equals("morning") ? "утреннюю" : "вечернюю") + " практику!";
+                answerCallbackQuery(callbackQuery.getId(), answer);
+            } else {
+                answerCallbackQuery(callbackQuery.getId(), "❌ Вы уже записаны на это занятие!");
+            }
+        } catch (SQLException e) {
+            System.err.println("❌ Ошибка записи пользователя: " + e.getMessage());
+            answerCallbackQuery(callbackQuery.getId(), "❌ Произошла ошибка при записи");
+        }
+    }
+
+    private void handleUserCancel(org.telegram.telegrambots.meta.api.objects.CallbackQuery callbackQuery) {
+        String data = callbackQuery.getData();
+        Long userId = callbackQuery.getFrom().getId();
+        String username = callbackQuery.getFrom().getUserName();
+        String firstName = callbackQuery.getFrom().getFirstName();
+
+        String displayName = username != null ? "@" + username : firstName;
+        String lessonType = data.substring(7);
+
+        LocalDate tomorrow = LocalDate.now().plusDays(1);
+
+        try (Connection conn = getConnection()) {
+            PreparedStatement checkStmt = conn.prepareStatement(
+                    "SELECT id FROM registrations WHERE user_id = ? AND lesson_date = ? AND lesson_type = ?"
+            );
+            checkStmt.setLong(1, userId);
+            checkStmt.setDate(2, Date.valueOf(tomorrow));
+            checkStmt.setString(3, lessonType);
+            ResultSet rs = checkStmt.executeQuery();
+
+            if (rs.next()) {
+                PreparedStatement deleteStmt = conn.prepareStatement(
+                        "DELETE FROM registrations WHERE user_id = ? AND lesson_date = ? AND lesson_type = ?"
+                );
+                deleteStmt.setLong(1, userId);
+                deleteStmt.setDate(2, Date.valueOf(tomorrow));
+                deleteStmt.setString(3, lessonType);
+                int deletedRows = deleteStmt.executeUpdate();
+
+                if (deletedRows > 0) {
+                    String answer = "❌ Запись на " + (lessonType.equals("morning") ? "утреннюю" : "вечернюю") + " практику отменена!";
+                    answerCallbackQuery(callbackQuery.getId(), answer);
+                    System.out.println("✅ Пользователь " + displayName + " отменил запись на " + lessonType);
+                } else {
+                    answerCallbackQuery(callbackQuery.getId(), "❌ Не удалось отменить запись");
+                }
+            } else {
+                answerCallbackQuery(callbackQuery.getId(), "❌ Вы не записаны на это занятие!");
+            }
+        } catch (SQLException e) {
+            System.err.println("❌ Ошибка отмены записи пользователя: " + e.getMessage());
+            answerCallbackQuery(callbackQuery.getId(), "❌ Произошла ошибка при отмене записи");
+        }
+    }
+
+    private void answerCallbackQuery(String callbackQueryId, String text) {
+        try {
+            org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery answer = new org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery();
+            answer.setCallbackQueryId(callbackQueryId);
+            answer.setText(text);
+            answer.setShowAlert(false);
+            execute(answer);
+        } catch (TelegramApiException e) {
+            System.err.println("❌ Ошибка ответа на callback: " + e.getMessage());
         }
     }
 
@@ -1025,7 +897,6 @@ public class YogaBot extends TelegramWebhookBot {
         try (Connection conn = getConnection()) {
             Statement st = conn.createStatement();
 
-            // Таблица для кастомных занятий
             st.executeUpdate("""
                 CREATE TABLE IF NOT EXISTS lessons (
                     id BIGSERIAL PRIMARY KEY,
@@ -1037,7 +908,6 @@ public class YogaBot extends TelegramWebhookBot {
                 )
             """);
 
-            // Таблица для записей пользователей
             st.executeUpdate("""
                 CREATE TABLE IF NOT EXISTS registrations (
                     id BIGSERIAL PRIMARY KEY,
@@ -1051,7 +921,6 @@ public class YogaBot extends TelegramWebhookBot {
                 )
             """);
 
-            // Таблица настроек бота
             st.executeUpdate("""
                 CREATE TABLE IF NOT EXISTS bot_settings (
                     id INTEGER PRIMARY KEY,
@@ -1060,7 +929,6 @@ public class YogaBot extends TelegramWebhookBot {
                 )
             """);
 
-            // Инициализируем настройки
             st.executeUpdate("""
                 INSERT INTO bot_settings (id, notifications_enabled) 
                 VALUES (1, true) 
