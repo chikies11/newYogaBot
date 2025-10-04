@@ -70,6 +70,72 @@ public class YogaBot extends TelegramWebhookBot {
         System.out.println("✅ YogaBot инициализирован");
     }
 
+    public void sendTestNotification() {
+        System.out.println("🧪 Отправка тестового уведомления...");
+
+        LocalDate tomorrow = LocalDate.now().plusDays(1);
+        Map<String, String> tomorrowSchedule = getTomorrowSchedule(tomorrow);
+
+        String morningLesson = tomorrowSchedule.get("morning");
+        String eveningLesson = tomorrowSchedule.get("evening");
+
+        System.out.println("📅 Расписание на завтра:");
+        System.out.println("Утро: " + morningLesson);
+        System.out.println("Вечер: " + eveningLesson);
+
+        // Тестируем разные сценарии
+
+        // 1. Тест утреннего уведомления
+        System.out.println("🔔 Тест утреннего уведомления...");
+        sendMorningNotification(morningLesson);
+
+        // 2. Ждем и тестируем вечернее
+        try {
+            Thread.sleep(2000);
+            System.out.println("🔔 Тест вечернего уведомления...");
+            sendEveningNotification(eveningLesson);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        // 3. Ждем и тестируем уведомление об отсутствии занятий
+        try {
+            Thread.sleep(2000);
+            System.out.println("🔔 Тест уведомления об отсутствии занятий...");
+            sendNoClassesNotification(morningLesson, eveningLesson);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        System.out.println("✅ Тестовые уведомления отправлены!");
+    }
+
+    // Добавьте этот метод для принудительной отправки уведомлений
+    public void sendManualNotification(String type) {
+        System.out.println("🔔 Ручная отправка уведомления: " + type);
+
+        LocalDate tomorrow = LocalDate.now().plusDays(1);
+        Map<String, String> tomorrowSchedule = getTomorrowSchedule(tomorrow);
+
+        String morningLesson = tomorrowSchedule.get("morning");
+        String eveningLesson = tomorrowSchedule.get("evening");
+
+        switch (type) {
+            case "morning":
+                sendMorningNotification(morningLesson);
+                break;
+            case "evening":
+                sendEveningNotification(eveningLesson);
+                break;
+            case "no_classes":
+                sendNoClassesNotification(morningLesson, eveningLesson);
+                break;
+            case "all":
+                sendTestNotification();
+                break;
+        }
+    }
+
     private void initializeFixedSchedule() {
         // Понедельник
         Map<String, String> monday = new HashMap<>();
@@ -164,11 +230,22 @@ public class YogaBot extends TelegramWebhookBot {
             case "📅 Расписание" -> showScheduleMenu(chatId);
             case "🔔 Уведомления" -> toggleNotifications(chatId);
             case "📋 Запись" -> showRegistrations(chatId);
+            case "🧪 Тест уведомлений" -> sendTestNotificationToAdmin(chatId); // Добавьте этот case
             case "🚫 Отмена" -> {
                 userStates.remove(userId);
                 showMainMenu(chatId);
             }
             default -> handleState(chatId, text, userId);
+        }
+    }
+
+    // Добавьте этот метод
+    private void sendTestNotificationToAdmin(Long chatId) {
+        try {
+            sendTestNotification();
+            sendMsg(chatId, "✅ Тестовые уведомления отправлены в канал! Проверьте @yoga_yollayo11");
+        } catch (Exception e) {
+            sendMsg(chatId, "❌ Ошибка отправки тестовых уведомлений: " + e.getMessage());
         }
     }
 
@@ -371,8 +448,13 @@ public class YogaBot extends TelegramWebhookBot {
         KeyboardRow row2 = new KeyboardRow();
         row2.add("📋 Запись");
 
+        // Временная кнопка для теста
+        KeyboardRow row3 = new KeyboardRow();
+        row3.add("🧪 Тест уведомлений");
+
         keyboard.add(row1);
         keyboard.add(row2);
+        keyboard.add(row3); // Добавляем тестовую строку
 
         keyboardMarkup.setKeyboard(keyboard);
         return keyboardMarkup;
