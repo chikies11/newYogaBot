@@ -4,14 +4,20 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.telegram.telegrambots.meta.api.objects.Update;
 
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
+
 @RestController
 @RequestMapping("/")
 public class WebhookController {
 
     private final YogaBot bot;
+    private final PingService pingService;
 
-    public WebhookController(YogaBot bot) {
+    public WebhookController(YogaBot bot, PingService pingService) {
         this.bot = bot;
+        this.pingService = pingService;
     }
 
     @PostMapping
@@ -29,22 +35,43 @@ public class WebhookController {
         return ResponseEntity.ok("YogaBot is running! 🤖");
     }
 
+    @GetMapping("/health")
+    public ResponseEntity<String> health() {
+        return ResponseEntity.ok("YogaBot is healthy! 🏥");
+    }
+
+    @GetMapping("/status")
+    public ResponseEntity<Map<String, Object>> getStatus() {
+        Map<String, Object> status = new HashMap<>();
+        status.put("status", "OK");
+        status.put("timestamp", LocalDateTime.now().toString());
+        status.put("service", "YogaBot");
+        status.put("version", "1.0");
+
+        if (pingService != null) {
+            status.put("lastPing", pingService.getLastSuccessfulPing() != null ?
+                    pingService.getLastSuccessfulPing().toString() : "N/A");
+        }
+
+        return ResponseEntity.ok(status);
+    }
+
+    // Тестовые эндпоинты для уведомлений
     @GetMapping("/test-notification")
     public ResponseEntity<String> testNotification() {
         try {
             bot.sendTestNotification();
             return ResponseEntity.ok("""
-                    🧪 Тестовые уведомления отправлены!
-                    
-                    Проверьте канал: @yoga_yollayo11
-                    
-                    Должны прийти:
-                    • 🌅 Утреннее уведомление
-                    • 🌇 Вечернее уведомление  
-                    • 📝 Уведомление об отсутствии занятий (если применимо)
-                    
-                    Если не приходят - проверьте права бота в канале!
-                    """);
+                🧪 Тестовые уведомления отправлены!
+                
+                Проверьте канал: @yoga_yollayo11
+                
+                Должны прийти:
+                • 🌅 Утреннее уведомление
+                • 🌇 Вечернее уведомление  
+                
+                Если не приходят - проверьте права бота в канале!
+                """);
         } catch (Exception e) {
             return ResponseEntity.status(500).body("❌ Ошибка: " + e.getMessage());
         }
