@@ -164,12 +164,25 @@ public class YogaBot extends TelegramWebhookBot {
             case "🔔 Уведомления" -> toggleNotifications(chatId);
             case "📋 Запись" -> showRegistrations(chatId);
             case "🧪 Тест уведомлений" -> sendTestNotificationToAdmin(chatId);
+            case "🕒 Проверить время" -> checkAndSendTime(chatId); // Добавьте эту строку
             case "🚫 Отмена" -> {
                 userStates.remove(userId);
                 showMainMenu(chatId);
             }
             default -> handleState(chatId, text, userId);
         }
+    }
+
+    // Добавьте этот метод
+    private void checkAndSendTime(Long chatId) {
+        checkServerTime();
+        String timeInfo = "🕒 *Информация о времени:*\n\n" +
+                "Сервер (UTC): " + LocalDateTime.now() + "\n" +
+                "Москва (UTC+3): " + LocalDateTime.now().plusHours(3) + "\n" +
+                "Час сервера: " + LocalDateTime.now().getHour() + "\n" +
+                "Час Москвы: " + LocalDateTime.now().plusHours(3).getHour();
+
+        sendMsg(chatId, timeInfo);
     }
 
     private void handleCallbackQuery(org.telegram.telegrambots.meta.api.objects.CallbackQuery callbackQuery) {
@@ -233,9 +246,14 @@ public class YogaBot extends TelegramWebhookBot {
         KeyboardRow row3 = new KeyboardRow();
         row3.add("🧪 Тест уведомлений");
 
+        // Временная кнопка для отладки времени
+        KeyboardRow row4 = new KeyboardRow();
+        row4.add("🕒 Проверить время");
+
         keyboard.add(row1);
         keyboard.add(row2);
         keyboard.add(row3);
+        keyboard.add(row4); // Добавляем новую кнопку
 
         keyboardMarkup.setKeyboard(keyboard);
         return keyboardMarkup;
