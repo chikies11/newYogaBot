@@ -92,6 +92,7 @@ public class YogaBot extends TelegramWebhookBot {
             initializeBackupSchedule();
         }
 
+        System.out.println("📋 Итоговый fixedSchedule: " + fixedSchedule.size() + " дней");
         System.out.println("✅ Расписание инициализировано");
     }
 
@@ -577,15 +578,24 @@ public class YogaBot extends TelegramWebhookBot {
         System.out.println("🎯 НАЧАЛО showScheduleMenu для чата " + chatId);
 
         try {
-            // Временно используем упрощенный текст чтобы избежать ошибок
-            String text = "📅 *Управление расписанием*\n\nВыберите раздел для редактирования:";
+            // ВЕРНЕМ РАСПИСАНИЕ ОБРАТНО!
+            String scheduleText = getWeeklySchedule();
+            String text = "📅 *Расписание на неделю:*\n\n" + scheduleText + "\n\nВыберите раздел для управления:";
+
+            // Проверим длину текста (Telegram имеет ограничения)
+            if (text.length() > 4096) {
+                System.out.println("⚠️ Текст слишком длинный: " + text.length() + " символов");
+                // Сократим текст если слишком длинный
+                text = "📅 *Расписание на неделю:*\n\n" +
+                        "Расписание загружено успешно.\n\nВыберите раздел для управления:";
+            }
 
             System.out.println("🔧 Создаем inline-кнопки...");
 
             InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
             List<List<InlineKeyboardButton>> rows = new ArrayList<>();
 
-            // Простые кнопки
+            // Кнопки управления расписанием
             List<InlineKeyboardButton> row1 = new ArrayList<>();
             row1.add(createInlineButton("🌅 Утренние занятия", "schedule_morning"));
             row1.add(createInlineButton("🌇 Вечерние занятия", "schedule_evening"));
@@ -613,7 +623,7 @@ public class YogaBot extends TelegramWebhookBot {
             e.printStackTrace();
 
             try {
-                sendMsg(chatId, "❌ Ошибка: " + e.getMessage());
+                sendMsg(chatId, "❌ Ошибка при загрузке расписания: " + e.getMessage());
             } catch (Exception ex) {
                 System.err.println("❌ Не удалось отправить сообщение об ошибке: " + ex.getMessage());
             }
@@ -624,6 +634,7 @@ public class YogaBot extends TelegramWebhookBot {
 
     private String getWeeklySchedule() {
         System.out.println("🔄 Вызов getWeeklySchedule()");
+        System.out.println("📊 fixedSchedule size: " + fixedSchedule.size());
 
         try {
             StringBuilder sb = new StringBuilder();
@@ -633,6 +644,8 @@ public class YogaBot extends TelegramWebhookBot {
             for (int i = 0; i < 7; i++) {
                 LocalDate date = today.plusDays(i);
                 DayOfWeek dayOfWeek = date.getDayOfWeek();
+
+                System.out.println("📅 Обрабатываем день: " + dayOfWeek);
 
                 // Проверяем, есть ли расписание для этого дня
                 if (!fixedSchedule.containsKey(dayOfWeek)) {
@@ -654,6 +667,9 @@ public class YogaBot extends TelegramWebhookBot {
 
                 sb.append("🌅 *Утро:* ").append(morningLesson).append("\n");
                 sb.append("🌇 *Вечер:* ").append(eveningLesson).append("\n\n");
+
+                System.out.println("   - Утро: " + morningLesson);
+                System.out.println("   - Вечер: " + eveningLesson);
             }
 
             String result = sb.toString();
