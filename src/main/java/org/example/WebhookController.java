@@ -4,6 +4,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.telegram.telegrambots.meta.api.objects.Update;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
@@ -105,5 +106,34 @@ public class WebhookController {
         } catch (Exception e) {
             return ResponseEntity.status(500).body("❌ Ошибка: " + e.getMessage());
         }
+    }
+
+    @GetMapping("/force-notification")
+    public ResponseEntity<String> forceNotification() {
+        try {
+            // Принудительно запускаем уведомления
+            bot.sendDailyNotifications();
+            return ResponseEntity.ok("""
+            🔔 Принудительная отправка уведомлений запущена!
+            
+            Проверьте логи в Render для отладки.
+            Должны отправиться уведомления согласно текущему времени.
+            """);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("❌ Ошибка: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/debug-time")
+    public ResponseEntity<Map<String, String>> debugTime() {
+        // Вызываем метод проверки времени
+        bot.checkServerTime();
+
+        Map<String, String> timeInfo = new HashMap<>();
+        timeInfo.put("server_time_utc", LocalDateTime.now().toString());
+        timeInfo.put("server_time_msk", LocalDateTime.now().plusHours(3).toString());
+        timeInfo.put("tomorrow", LocalDate.now().plusDays(1).toString());
+
+        return ResponseEntity.ok(timeInfo);
     }
 }

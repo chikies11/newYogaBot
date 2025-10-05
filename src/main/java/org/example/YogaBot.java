@@ -711,13 +711,19 @@ public class YogaBot extends TelegramWebhookBot {
     }
 
     public void sendDailyNotifications() {
+        System.out.println("🔔 Запуск sendDailyNotifications...");
+
         if (channelId == null || channelId.isEmpty()) {
-            System.out.println("⚠️ Channel ID не настроен");
+            System.out.println("⚠️ Channel ID не настроен: " + channelId);
             return;
         }
 
         LocalDate tomorrow = LocalDate.now().plusDays(1);
         LocalTime now = LocalTime.now();
+
+        System.out.println("📅 Завтра: " + tomorrow);
+        System.out.println("🕒 Текущее время UTC: " + now);
+        System.out.println("🕒 Текущее время МСК: " + now.plusHours(3));
 
         try (Connection conn = getConnection()) {
             Statement checkStmt = conn.createStatement();
@@ -727,22 +733,39 @@ public class YogaBot extends TelegramWebhookBot {
                 System.out.println("🔕 Уведомления отключены в настройках");
                 return;
             }
+            System.out.println("✅ Уведомления включены в настройках");
 
             Map<String, String> tomorrowSchedule = getTomorrowSchedule(tomorrow);
 
             String morningLesson = tomorrowSchedule.get("morning");
             String eveningLesson = tomorrowSchedule.get("evening");
 
-            if (now.getHour() == 12 && now.getMinute() == 0) {
+            System.out.println("📅 Расписание на завтра:");
+            System.out.println("Утро: " + morningLesson);
+            System.out.println("Вечер: " + eveningLesson);
+
+            // Определяем тип уведомления по времени
+            int hour = now.getHour();
+            int minute = now.getMinute();
+
+            System.out.println("⏰ Проверка времени: " + hour + ":" + minute);
+
+            if (hour == 9 && minute == 0) { // 12:00 МСК
+                System.out.println("🌅 Отправка утреннего уведомления...");
                 sendMorningNotification(morningLesson);
-            } else if (now.getHour() == 18 && now.getMinute() == 0) {
+            } else if (hour == 15 && minute == 0) { // 18:00 МСК
+                System.out.println("🌇 Отправка вечернего уведомления...");
                 sendEveningNotification(eveningLesson);
-            } else if (now.getHour() == 14 && now.getMinute() == 0) {
+            } else if (hour == 11 && minute == 0) { // 14:00 МСК
+                System.out.println("📝 Отправка уведомления об отсутствии занятий...");
                 sendNoClassesNotification(morningLesson, eveningLesson);
+            } else {
+                System.out.println("⏰ Не время для уведомлений");
             }
 
         } catch (Exception e) {
             System.err.println("❌ Ошибка отправки уведомлений: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
@@ -944,5 +967,12 @@ public class YogaBot extends TelegramWebhookBot {
 
     private boolean isAdmin(Long userId) {
         return adminId != null && adminId.equals(userId.toString());
+    }
+
+    public void checkServerTime() {
+        System.out.println("🕒 Текущее время сервера (UTC): " + LocalDateTime.now());
+        System.out.println("🕒 Текущее время Moscow (UTC+3): " + LocalDateTime.now().plusHours(3));
+        System.out.println("🕒 Текущий час (UTC): " + LocalDateTime.now().getHour());
+        System.out.println("🕒 Текущий час (Moscow): " + LocalDateTime.now().plusHours(3).getHour());
     }
 }
