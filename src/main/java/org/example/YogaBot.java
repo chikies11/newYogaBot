@@ -660,6 +660,7 @@ public class YogaBot extends TelegramWebhookBot {
         boolean hasMorning = morningLesson != null && !morningLesson.equals("ОТДЫХ") && !morningLesson.equals("Отдых");
         boolean hasEvening = eveningLesson != null && !eveningLesson.equals("ОТДЫХ") && !eveningLesson.equals("Отдых");
 
+        // Отправляем уведомление если ЕСТЬ отсутствующие занятия
         if (!hasMorning && !hasEvening) {
             String text = "Не могу стоять, пока другие работают... Пойду полежу...)\n\nУра, завтра занятий нет! Отдыхаем и восстанавливаемся! 💫";
             sendToChannel(text);
@@ -667,6 +668,9 @@ public class YogaBot extends TelegramWebhookBot {
             sendToChannel("🌅 На завтра утренних занятий нет");
         } else if (!hasEvening) {
             sendToChannel("🌇 На завтра вечерних занятий нет");
+        } else {
+            // Если оба занятия есть, не отправляем ничего
+            System.out.println("✅ Оба занятия есть, уведомление не требуется");
         }
     }
 
