@@ -328,9 +328,54 @@ public class YogaBot extends TelegramWebhookBot {
                 userStates.remove(userId);
                 showMainMenu(chatId, true);
             }
+            case "/test_buttons" -> {
+                System.out.println("🧪 Тестируем inline-кнопки");
+                testInlineButtons(chatId);
+            }
             default -> {
                 System.out.println("📝 Админ вводит текст: " + text);
                 handleState(chatId, text, userId);
+            }
+        }
+    }
+
+    private void testInlineButtons(Long chatId) {
+        try {
+            System.out.println("🧪 Начало теста inline-кнопок");
+
+            String text = "🧪 *Тест inline-кнопок*\n\nЕсли вы видите это сообщение и кнопки ниже - значит inline-кнопки работают!";
+
+            InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+
+            // Простые кнопки
+            List<InlineKeyboardButton> row1 = new ArrayList<>();
+            row1.add(createInlineButton("✅ Тест 1", "test_button_1"));
+            row1.add(createInlineButton("✅ Тест 2", "test_button_2"));
+
+            List<InlineKeyboardButton> row2 = new ArrayList<>();
+            row2.add(createInlineButton("🔙 Назад", "test_back"));
+
+            rows.add(row1);
+            rows.add(row2);
+            markup.setKeyboard(rows);
+
+            SendMessage message = new SendMessage(chatId.toString(), text);
+            message.setParseMode("Markdown");
+            message.setReplyMarkup(markup);
+
+            System.out.println("🧪 Отправляем тестовое сообщение с кнопками...");
+            execute(message);
+            System.out.println("🧪 Тестовое сообщение отправлено успешно!");
+
+        } catch (Exception e) {
+            System.err.println("❌ Ошибка в тесте кнопок: " + e.getMessage());
+            e.printStackTrace();
+
+            try {
+                sendMsg(chatId, "❌ Ошибка теста: " + e.getMessage());
+            } catch (Exception ex) {
+                System.err.println("❌ Не удалось отправить сообщение об ошибке: " + ex.getMessage());
             }
         }
     }
@@ -530,65 +575,114 @@ public class YogaBot extends TelegramWebhookBot {
         System.out.println("🔄 Начало showScheduleMenu для чата " + chatId);
 
         try {
+            // Сначала проверим, что fixedSchedule не пустой
+            System.out.println("📊 fixedSchedule size: " + fixedSchedule.size());
+            if (fixedSchedule.isEmpty()) {
+                System.out.println("⚠️ fixedSchedule пустой, используем резервное расписание");
+                initializeBackupSchedule();
+            }
+
             String scheduleText = getWeeklySchedule();
+            System.out.println("📝 scheduleText length: " + scheduleText.length());
+
             String text = "📅 *Расписание на неделю:*\n\n" + scheduleText + "\n\nВыберите раздел для управления:";
 
+            // Проверим длину текста (Telegram имеет ограничения)
+            if (text.length() > 4096) {
+                System.out.println("⚠️ Текст слишком длинный: " + text.length() + " символов");
+                text = "📅 *Расписание на неделю:*\n\n" +
+                        "Расписание загружено успешно.\n\nВыберите раздел для управления:";
+            }
+
+            System.out.println("🔧 Создаем inline-кнопки...");
             InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
             List<List<InlineKeyboardButton>> rows = new ArrayList<>();
 
+            // Создаем кнопки
             List<InlineKeyboardButton> timeRow = new ArrayList<>();
-            timeRow.add(createInlineButton("🌅 Утро", "schedule_morning"));
-            timeRow.add(createInlineButton("🌇 Вечер", "schedule_evening"));
+            InlineKeyboardButton morningBtn = createInlineButton("🌅 Утро", "schedule_morning");
+            InlineKeyboardButton eveningBtn = createInlineButton("🌇 Вечер", "schedule_evening");
+
+            timeRow.add(morningBtn);
+            timeRow.add(eveningBtn);
 
             List<InlineKeyboardButton> backRow = new ArrayList<>();
-            backRow.add(createInlineButton("🔙 Назад", "back_to_main"));
+            InlineKeyboardButton backBtn = createInlineButton("🔙 Назад", "back_to_main");
+            backRow.add(backBtn);
 
             rows.add(timeRow);
             rows.add(backRow);
             markup.setKeyboard(rows);
 
+            System.out.println("✅ Кнопки созданы, отправляем сообщение...");
+
             SendMessage message = new SendMessage(chatId.toString(), text);
             message.setParseMode("Markdown");
             message.setReplyMarkup(markup);
 
-            System.out.println("✅ Отправляем меню расписания с inline-кнопками");
+            // Отправляем сообщение
             execute(message);
-            System.out.println("✅ Показано меню расписания для админа " + chatId);
+            System.out.println("✅ Меню расписания успешно отправлено для чата " + chatId);
 
-        } catch (Exception e) {
-            System.err.println("❌ КРИТИЧЕСКАЯ ОШИБКА в showScheduleMenu: " + e.getMessage());
+        } catch (TelegramApiException e) {
+            System.err.println("❌ Ошибка Telegram API в showScheduleMenu: " + e.getMessage());
             e.printStackTrace();
 
-            // Попробуем отправить простое сообщение без клавиатуры
+            // Попробуем отправить сообщение без разметки
             try {
-                sendMsg(chatId, "❌ Ошибка при загрузке меню расписания. Попробуйте позже.");
+                sendMsg(chatId, "❌ Ошибка при загрузке меню расписания: " + e.getMessage());
             } catch (Exception ex) {
-                System.err.println("❌ Даже простое сообщение не отправляется: " + ex.getMessage());
+                System.err.println("❌ Не удалось отправить даже простое сообщение: " + ex.getMessage());
             }
+        } catch (Exception e) {
+            System.err.println("❌ Неожиданная ошибка в showScheduleMenu: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
     private String getWeeklySchedule() {
-        StringBuilder sb = new StringBuilder();
-        LocalDate today = LocalDate.now();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("EEEE (dd.MM)");
+        System.out.println("🔄 Вызов getWeeklySchedule()");
 
-        for (int i = 0; i < 7; i++) {
-            LocalDate date = today.plusDays(i);
-            DayOfWeek dayOfWeek = date.getDayOfWeek();
-            String dayName = date.format(formatter);
-            dayName = dayName.substring(0, 1).toUpperCase() + dayName.substring(1);
+        try {
+            StringBuilder sb = new StringBuilder();
+            LocalDate today = LocalDate.now();
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("EEEE (dd.MM)");
 
-            sb.append("📅 *").append(dayName).append("*\n");
+            for (int i = 0; i < 7; i++) {
+                LocalDate date = today.plusDays(i);
+                DayOfWeek dayOfWeek = date.getDayOfWeek();
 
-            String morningLesson = fixedSchedule.get(dayOfWeek).get("morning");
-            String eveningLesson = fixedSchedule.get(dayOfWeek).get("evening");
+                // Проверяем, есть ли расписание для этого дня
+                if (!fixedSchedule.containsKey(dayOfWeek)) {
+                    System.out.println("⚠️ Нет расписания для дня: " + dayOfWeek);
+                    continue;
+                }
 
-            sb.append("🌅 *Утро:* ").append(morningLesson).append("\n");
-            sb.append("🌇 *Вечер:* ").append(eveningLesson).append("\n\n");
+                String dayName = date.format(formatter);
+                dayName = dayName.substring(0, 1).toUpperCase() + dayName.substring(1);
+
+                sb.append("📅 *").append(dayName).append("*\n");
+
+                String morningLesson = fixedSchedule.get(dayOfWeek).get("morning");
+                String eveningLesson = fixedSchedule.get(dayOfWeek).get("evening");
+
+                // Проверяем на null
+                morningLesson = morningLesson != null ? morningLesson : "Не указано";
+                eveningLesson = eveningLesson != null ? eveningLesson : "Не указано";
+
+                sb.append("🌅 *Утро:* ").append(morningLesson).append("\n");
+                sb.append("🌇 *Вечер:* ").append(eveningLesson).append("\n\n");
+            }
+
+            String result = sb.toString();
+            System.out.println("✅ getWeeklySchedule успешно завершен, длина: " + result.length());
+            return result;
+
+        } catch (Exception e) {
+            System.err.println("❌ Ошибка в getWeeklySchedule: " + e.getMessage());
+            e.printStackTrace();
+            return "⚠️ Ошибка загрузки расписания. Попробуйте позже.";
         }
-
-        return sb.toString();
     }
 
     private void showDaySelection(Long chatId, String lessonType) {
