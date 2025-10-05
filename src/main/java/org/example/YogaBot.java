@@ -121,7 +121,6 @@ public class YogaBot extends TelegramWebhookBot {
     public BotApiMethod<?> onWebhookUpdateReceived(Update update) {
         System.out.println("🔄 Начало обработки update: " + update.getUpdateId());
 
-        // Проверяем, что это сообщение от админа
         Long userId = null;
         if (update.hasMessage()) {
             userId = update.getMessage().getFrom().getId();
@@ -129,36 +128,41 @@ public class YogaBot extends TelegramWebhookBot {
             userId = update.getCallbackQuery().getFrom().getId();
         }
 
-        if (userId == null || !isAdmin(userId)) {
-            System.out.println("⛔ Неавторизованный доступ от пользователя: " + userId);
+        if (userId == null) {
+            System.out.println("⛔ Неизвестный пользователь");
             return null;
         }
 
+        // Проверяем тип доступа
+        boolean isAdminUser = isAdmin(userId);
+
         if (update.hasMessage() && update.getMessage().hasText()) {
-            handleMessage(update.getMessage().getChatId(), update.getMessage().getText(), userId);
+            handleMessage(update.getMessage().getChatId(), update.getMessage().getText(), userId, isAdminUser);
         } else if (update.hasCallbackQuery()) {
-            handleCallbackQuery(update.getCallbackQuery());
+            handleCallbackQuery(update.getCallbackQuery(), isAdminUser);
         }
 
         System.out.println("✅ Завершение обработки update: " + update.getUpdateId());
         return null;
     }
 
-    private void handleMessage(Long chatId, String text, Long userId) {
-        System.out.println("💬 Обработка сообщения от " + userId + ": " + text);
+    private void handleMessage(Long chatId, String text, Long userId, boolean isAdminUser) {
+        System.out.println("💬 Обработка сообщения от " + userId + " (admin: " + isAdminUser + "): " + text);
 
+        // Команды доступные всем пользователям
+        // Команды доступные всем пользователям
         switch (text) {
-            case "/start" -> showMainMenu(chatId);
-            case "📅 Расписание" -> showScheduleMenu(chatId);
-            case "🔔 Уведомления" -> toggleNotifications(chatId);
-            case "📋 Запись" -> showRegistrations(chatId);
-            case "🧪 Тест уведомлений" -> sendTestNotificationToAdmin(chatId);
+            case "/start" -> showMainMenu(chatId, isAdminUser);
+            case "📅 Расписание" -> showScheduleForUsers(chatId);
+            case "📋 Мои записи" -> showUserRegistrations(chatId, userId);
             case "🕒 Проверить время" -> checkAndSendTime(chatId);
-            case "🚫 Отмена" -> {
-                userStates.remove(userId);
-                showMainMenu(chatId);
+            default -> {
+                if (isAdminUser) {
+                    handleAdminMessage(chatId, text, userId);  // ← ВОТ ТУТ ВЫЗОВ
+                } else {
+                    sendMsg(chatId, "❌ Команда не найдена. Используйте кнопки меню.");
+                }
             }
-            default -> handleState(chatId, text, userId);
         }
     }
 
@@ -173,18 +177,26 @@ public class YogaBot extends TelegramWebhookBot {
         sendMsg(chatId, timeInfo);
     }
 
-    private void handleCallbackQuery(org.telegram.telegrambots.meta.api.objects.CallbackQuery callbackQuery) {
+    private void handleCallbackQuery(org.telegram.telegrambots.meta.api.objects.CallbackQuery callbackQuery, boolean isAdminUser) {
         Long chatId = callbackQuery.getMessage().getChatId();
+        Long userId = callbackQuery.getFrom().getId();
         String data = callbackQuery.getData();
         Integer messageId = callbackQuery.getMessage().getMessageId();
 
         System.out.println("🔘 Обработка callback: " + data);
 
+        // Callback'и только для админов
+        if (!isAdminUser) {
+            answerCallbackQuery(callbackQuery.getId(), "❌ Эта функция доступна только администраторам");
+            return;
+        }
+
+        // Админские callback'и
         switch (data) {
             case "schedule_morning" -> showDaySelection(chatId, "morning");
             case "schedule_evening" -> showDaySelection(chatId, "evening");
             case "back_to_schedule" -> showScheduleMenu(chatId);
-            case "back_to_main" -> showMainMenu(chatId);
+            case "back_to_main" -> showMainMenu(chatId, true);
             default -> {
                 if (data.startsWith("day_")) {
                     handleDaySelection(chatId, data);
@@ -192,31 +204,49 @@ public class YogaBot extends TelegramWebhookBot {
                     handleEditLesson(chatId, data);
                 } else if (data.startsWith("delete_")) {
                     handleDeleteLesson(chatId, data, messageId);
-                } else if (data.startsWith("signup_")) {
-                    handleUserSignup(callbackQuery);
-                } else if (data.startsWith("cancel_")) {
-                    handleUserCancel(callbackQuery);
                 }
             }
         }
     }
 
-    private void showMainMenu(Long chatId) {
-        String text = "🧘 *Админ-панель YogaBot*\n\nВыберите раздел для управления:";
+    private void handleAdminMessage(Long chatId, String text, Long userId) {
+        System.out.println("👨‍💼 Обработка админской команды: " + text);
+
+        switch (text) {
+            case "📅 Расписание" -> showScheduleMenu(chatId);
+            case "🔔 Уведомления" -> toggleNotifications(chatId);
+            case "📋 Все записи" -> showRegistrations(chatId);
+            case "🧪 Тест уведомлений" -> sendTestNotificationToAdmin(chatId);
+            case "🕒 Проверить время" -> checkAndSendTime(chatId);
+            case "🚫 Отмена" -> {
+                userStates.remove(userId);
+                showMainMenu(chatId, true);
+            }
+            default -> handleState(chatId, text, userId);
+        }
+    }
+
+    private void showMainMenu(Long chatId, boolean isAdminUser) {
+        String text;
+        if (isAdminUser) {
+            text = "🧘 *Админ-панель YogaBot*\n\nВыберите раздел для управления:";
+        } else {
+            text = "🧘 *YogaBot - Запись на занятия*\n\nВыберите действие:";
+        }
 
         SendMessage message = new SendMessage(chatId.toString(), text);
         message.setParseMode("Markdown");
-        message.setReplyMarkup(createMainMenuKeyboard());
+        message.setReplyMarkup(createMainMenuKeyboard(isAdminUser));
 
         try {
             execute(message);
-            System.out.println("✅ Показано главное меню для чата " + chatId);
+            System.out.println("✅ Показано главное меню для чата " + chatId + " (admin: " + isAdminUser + ")");
         } catch (TelegramApiException e) {
             System.err.println("❌ Ошибка отправки меню: " + e.getMessage());
         }
     }
 
-    private ReplyKeyboardMarkup createMainMenuKeyboard() {
+    private ReplyKeyboardMarkup createMainMenuKeyboard(boolean isAdminUser) {
         ReplyKeyboardMarkup keyboardMarkup = new ReplyKeyboardMarkup();
         keyboardMarkup.setSelective(true);
         keyboardMarkup.setResizeKeyboard(true);
@@ -224,26 +254,116 @@ public class YogaBot extends TelegramWebhookBot {
 
         List<KeyboardRow> keyboard = new ArrayList<>();
 
+        // Кнопки для всех пользователей
         KeyboardRow row1 = new KeyboardRow();
         row1.add("📅 Расписание");
-        row1.add("🔔 Уведомления");
+        row1.add("📋 Мои записи");
 
         KeyboardRow row2 = new KeyboardRow();
-        row2.add("📋 Запись");
-
-        KeyboardRow row3 = new KeyboardRow();
-        row3.add("🧪 Тест уведомлений");
-
-        KeyboardRow row4 = new KeyboardRow();
-        row4.add("🕒 Проверить время");
+        row2.add("🕒 Проверить время");
 
         keyboard.add(row1);
         keyboard.add(row2);
-        keyboard.add(row3);
-        keyboard.add(row4);
+
+        // Кнопки только для админов
+        if (isAdminUser) {
+            KeyboardRow adminRow1 = new KeyboardRow();
+            adminRow1.add("🔔 Уведомления");
+            adminRow1.add("📋 Все записи");
+
+            KeyboardRow adminRow2 = new KeyboardRow();
+            adminRow2.add("🧪 Тест уведомлений");
+
+            keyboard.add(adminRow1);
+            keyboard.add(adminRow2);
+        }
 
         keyboardMarkup.setKeyboard(keyboard);
         return keyboardMarkup;
+    }
+
+    private void showScheduleForUsers(Long chatId) {
+        String scheduleText = getWeeklySchedule();
+        String text = "📅 *Расписание на неделю:*\n\n" + scheduleText +
+                "\n\nЗаписывайтесь на занятия через уведомления в канале!";
+
+        SendMessage message = new SendMessage(chatId.toString(), text);
+        message.setParseMode("Markdown");
+
+        try {
+            execute(message);
+        } catch (TelegramApiException e) {
+            System.err.println("❌ Ошибка отправки расписания: " + e.getMessage());
+        }
+    }
+
+    private void showUserRegistrations(Long chatId, Long userId) {
+        LocalDate tomorrow = LocalDate.now().plusDays(1);
+
+        try {
+            boolean hasMorning = databaseService.isUserRegistered(userId, tomorrow, "morning");
+            boolean hasEvening = databaseService.isUserRegistered(userId, tomorrow, "evening");
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("📋 *Ваши записи на завтра (").append(tomorrow.format(DateTimeFormatter.ofPattern("dd.MM"))).append(")*\n\n");
+
+            if (!hasMorning && !hasEvening) {
+                sb.append("У вас нет записей на завтра.\n\n");
+                sb.append("Чтобы записаться, используйте кнопки в уведомлениях канала @yoga_yollayo11");
+            } else {
+                if (hasMorning) {
+                    sb.append("✅ Записан(а) на утреннюю практику\n");
+                }
+                if (hasEvening) {
+                    sb.append("✅ Записан(а) на вечернюю практику\n");
+                }
+                sb.append("\nЧтобы отменить запись, используйте кнопки в уведомлениях канала");
+            }
+
+            sendMsg(chatId, sb.toString());
+
+        } catch (Exception e) {
+            System.err.println("❌ Ошибка получения записей пользователя: " + e.getMessage());
+            sendMsg(chatId, "❌ Ошибка при загрузке ваших записей");
+        }
+    }
+
+    private void handleUserRegistrationCallback(org.telegram.telegrambots.meta.api.objects.CallbackQuery callbackQuery) {
+        String data = callbackQuery.getData();
+        Long userId = callbackQuery.getFrom().getId();
+        String username = callbackQuery.getFrom().getUserName();
+        String firstName = callbackQuery.getFrom().getFirstName();
+
+        String displayName = username != null ? "@" + username : firstName;
+        boolean isSignup = data.startsWith("signup_");
+        String lessonType = data.substring(isSignup ? 7 : 7); // "signup_" или "cancel_"
+        LocalDate tomorrow = LocalDate.now().plusDays(1);
+
+        boolean success;
+        if (isSignup) {
+            success = databaseService.registerUser(userId, username, displayName, tomorrow, lessonType);
+        } else {
+            success = databaseService.cancelRegistration(userId, tomorrow, lessonType);
+        }
+
+        String lessonTypeText = lessonType.equals("morning") ? "утреннюю" : "вечернюю";
+        String answer;
+
+        if (isSignup) {
+            answer = success ?
+                    "✅ Вы записаны на " + lessonTypeText + " практику!" :
+                    "❌ Вы уже записаны на это занятие!";
+        } else {
+            answer = success ?
+                    "❌ Запись на " + lessonTypeText + " практику отменена!" :
+                    "❌ Вы не записаны на это занятие!";
+        }
+
+        answerCallbackQuery(callbackQuery.getId(), answer);
+
+        // Логируем действие
+        String action = isSignup ? "записался" : "отменил запись";
+        System.out.println("👤 Пользователь " + displayName + " " + action + " на " + lessonTypeText + " практику");
     }
 
     private void showScheduleMenu(Long chatId) {
