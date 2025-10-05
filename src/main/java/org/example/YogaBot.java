@@ -578,24 +578,17 @@ public class YogaBot extends TelegramWebhookBot {
         System.out.println("🎯 НАЧАЛО showScheduleMenu для чата " + chatId);
 
         try {
-            // ВЕРНЕМ РАСПИСАНИЕ ОБРАТНО!
+            System.out.println("🔄 Получаем расписание...");
             String scheduleText = getWeeklySchedule();
-            String text = "📅 *Расписание на неделю:*\n\n" + scheduleText + "\n\nВыберите раздел для управления:";
+            System.out.println("✅ Расписание получено, длина: " + scheduleText.length());
 
-            // Проверим длину текста (Telegram имеет ограничения)
-            if (text.length() > 4096) {
-                System.out.println("⚠️ Текст слишком длинный: " + text.length() + " символов");
-                // Сократим текст если слишком длинный
-                text = "📅 *Расписание на неделю:*\n\n" +
-                        "Расписание загружено успешно.\n\nВыберите раздел для управления:";
-            }
+            String text = "📅 *Расписание на неделю:*\n\n" + scheduleText + "\n\nВыберите раздел для управления:";
 
             System.out.println("🔧 Создаем inline-кнопки...");
 
             InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
             List<List<InlineKeyboardButton>> rows = new ArrayList<>();
 
-            // Кнопки управления расписанием
             List<InlineKeyboardButton> row1 = new ArrayList<>();
             row1.add(createInlineButton("🌅 Утренние занятия", "schedule_morning"));
             row1.add(createInlineButton("🌇 Вечерние занятия", "schedule_evening"));
@@ -613,7 +606,6 @@ public class YogaBot extends TelegramWebhookBot {
             message.setParseMode("Markdown");
             message.setReplyMarkup(markup);
 
-            // Отправляем сообщение
             System.out.println("🚀 Отправляем сообщение с inline-кнопками...");
             execute(message);
             System.out.println("✅ Меню расписания УСПЕШНО отправлено для чата " + chatId);
