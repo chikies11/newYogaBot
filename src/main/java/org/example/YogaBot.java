@@ -54,6 +54,15 @@ public class YogaBot extends TelegramWebhookBot {
         System.out.println("Admin ID: " + adminId);
         System.out.println("Channel ID: " + channelId);
 
+        // Проверка админских ID
+        if (adminId != null) {
+            String[] adminIds = adminId.split(",");
+            System.out.println("👨‍💼 Настроенные админы:");
+            for (String id : adminIds) {
+                System.out.println("   - " + id.trim());
+            }
+        }
+
         initializeFixedSchedule();
         System.out.println("✅ YogaBot инициализирован");
     }
@@ -202,9 +211,9 @@ public class YogaBot extends TelegramWebhookBot {
 
         System.out.println("🔘 Обработка callback: " + data + " от пользователя " + userId + " (admin: " + isAdminUser + ")");
 
-        // Проверяем права админа для ВСЕХ функций изменения расписания
+        // Проверяем права админа для функций изменения расписания
         if (data.startsWith("schedule_") || data.startsWith("day_") || data.startsWith("edit_") ||
-                data.startsWith("delete_") || data.startsWith("back_to_schedule") || data.startsWith("back_to_main")) {
+                data.startsWith("delete_") || data.equals("back_to_schedule") || data.equals("back_to_main")) {
 
             if (!isAdminUser) {
                 System.out.println("⛔ Попытка доступа к админским функциям без прав: " + userId);
@@ -213,32 +222,55 @@ public class YogaBot extends TelegramWebhookBot {
             }
         }
 
-        // Обработка callback'ов для админа
-        if (isAdminUser) {
-            switch (data) {
-                case "schedule_morning" -> showDaySelection(chatId, "morning");
-                case "schedule_evening" -> showDaySelection(chatId, "evening");
-                case "back_to_schedule" -> showScheduleMenu(chatId);
-                case "back_to_main" -> showMainMenu(chatId, true);
-                default -> {
-                    if (data.startsWith("day_")) {
-                        handleDaySelection(chatId, data);
-                    } else if (data.startsWith("edit_")) {
-                        handleEditLesson(chatId, data);
-                    } else if (data.startsWith("delete_")) {
-                        handleDeleteLesson(chatId, data, messageId);
-                    }
+        // Обработка callback'ов
+        switch (data) {
+            case "schedule_morning" -> {
+                if (isAdminUser) {
+                    showDaySelection(chatId, "morning");
+                } else {
+                    answerCallbackQuery(callbackQuery.getId(), "❌ Недостаточно прав");
                 }
             }
-        }
-
-        // Обработка callback'ов для обычных пользователей (запись/отмена)
-        else {
-            switch (data) {
-                case "signup_morning", "signup_evening" -> handleUserSignup(callbackQuery);
-                case "cancel_morning", "cancel_evening" -> handleUserCancel(callbackQuery);
-                default -> {
-                    System.out.println("⛔ Неизвестный callback от пользователя: " + data);
+            case "schedule_evening" -> {
+                if (isAdminUser) {
+                    showDaySelection(chatId, "evening");
+                } else {
+                    answerCallbackQuery(callbackQuery.getId(), "❌ Недостаточно прав");
+                }
+            }
+            case "back_to_schedule" -> {
+                if (isAdminUser) {
+                    showScheduleMenu(chatId);
+                } else {
+                    answerCallbackQuery(callbackQuery.getId(), "❌ Недостаточно прав");
+                }
+            }
+            case "back_to_main" -> showMainMenu(chatId, isAdminUser);
+            default -> {
+                if (data.startsWith("day_")) {
+                    if (isAdminUser) {
+                        handleDaySelection(chatId, data);
+                    } else {
+                        answerCallbackQuery(callbackQuery.getId(), "❌ Недостаточно прав");
+                    }
+                } else if (data.startsWith("edit_")) {
+                    if (isAdminUser) {
+                        handleEditLesson(chatId, data);
+                    } else {
+                        answerCallbackQuery(callbackQuery.getId(), "❌ Недостаточно прав");
+                    }
+                } else if (data.startsWith("delete_")) {
+                    if (isAdminUser) {
+                        handleDeleteLesson(chatId, data, messageId);
+                    } else {
+                        answerCallbackQuery(callbackQuery.getId(), "❌ Недостаточно прав");
+                    }
+                } else if (data.startsWith("signup_")) {
+                    handleUserSignup(callbackQuery);
+                } else if (data.startsWith("cancel_")) {
+                    handleUserCancel(callbackQuery);
+                } else {
+                    System.out.println("⛔ Неизвестный callback: " + data);
                     answerCallbackQuery(callbackQuery.getId(), "❌ Неизвестная команда");
                 }
             }
@@ -249,7 +281,7 @@ public class YogaBot extends TelegramWebhookBot {
         System.out.println("👨‍💼 Обработка админской команды: " + text);
 
         switch (text) {
-            case "📅 Расписание" -> showScheduleMenu(chatId);
+            case "📅 Расписание" -> showScheduleMenu(chatId);  // Это должно работать!
             case "🔔 Уведомления" -> toggleNotifications(chatId);
             case "📋 Все записи" -> showRegistrations(chatId);
             case "📊 Логи действий" -> showAdminLogs(chatId);
@@ -481,6 +513,7 @@ public class YogaBot extends TelegramWebhookBot {
 
         try {
             execute(message);
+            System.out.println("✅ Показано меню расписания для админа " + chatId);
         } catch (TelegramApiException e) {
             System.err.println("❌ Ошибка отправки меню расписания: " + e.getMessage());
         }
@@ -541,6 +574,7 @@ public class YogaBot extends TelegramWebhookBot {
 
         try {
             execute(message);
+            System.out.println("✅ Показан выбор дней для " + lessonType + " для админа " + chatId);
         } catch (TelegramApiException e) {
             System.err.println("❌ Ошибка отправки выбора дня: " + e.getMessage());
         }
@@ -561,7 +595,7 @@ public class YogaBot extends TelegramWebhookBot {
         InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
 
-        // Кнопки действий
+        // Кнопки действий - ВОТ ОНИ!
         List<InlineKeyboardButton> actionRow = new ArrayList<>();
         actionRow.add(createInlineButton("✏️ Изменить", "edit_" + dayOfWeek + "_" + lessonType));
         actionRow.add(createInlineButton("🗑️ Удалить", "delete_" + dayOfWeek + "_" + lessonType));
@@ -580,6 +614,7 @@ public class YogaBot extends TelegramWebhookBot {
 
         try {
             execute(message);
+            System.out.println("✅ Показаны действия для дня " + dayName + " " + lessonType + " для админа " + chatId);
         } catch (TelegramApiException e) {
             System.err.println("❌ Ошибка отправки действий для дня: " + e.getMessage());
         }
