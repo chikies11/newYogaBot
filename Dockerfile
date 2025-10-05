@@ -17,12 +17,23 @@ WORKDIR /app
 RUN apk add --no-cache tzdata
 ENV TZ=Europe/Moscow
 
+# Создаем непривилегированного пользователя для безопасности
+RUN addgroup -S spring && adduser -S spring -G spring
+USER spring
+
 COPY --from=builder /app/target/*.jar app.jar
 
 EXPOSE 8080
 
-# Оптимизированные JVM параметры
-ENTRYPOINT ["java", "-XX:+UseG1GC", "-Xmx256m", "-Xss512k", \
-           "-Dspring.profiles.active=prod", \
-           "-Djava.security.egd=file:/dev/./urandom", \
+# Оптимизированные JVM параметры для Render.com
+ENTRYPOINT ["java",
+           "-XX:+UseContainerSupport",
+           "-XX:MaxRAMPercentage=75.0",
+           "-Xmx256m",
+           "-Xss512k",
+           "-XX:+UseG1GC",
+           "-XX:MaxGCPauseMillis=200",
+           "-Dspring.profiles.active=prod",
+           "-Djava.security.egd=file:/dev/./urandom",
+           "-Dspring.datasource.hikari.leak-detection-threshold=60000",
            "-jar", "app.jar"]

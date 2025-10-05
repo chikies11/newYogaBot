@@ -185,18 +185,20 @@ public class YogaBot extends TelegramWebhookBot {
 
         System.out.println("🔘 Обработка callback: " + data);
 
-        // Callback'и только для админов
-        if (!isAdminUser) {
-            answerCallbackQuery(callbackQuery.getId(), "❌ Эта функция доступна только администраторам");
-            return;
+        // Проверяем права админа для админских функций
+        if (data.startsWith("schedule_") || data.startsWith("edit_") || data.startsWith("delete_") || data.startsWith("back_to_")) {
+            if (!isAdminUser) {
+                answerCallbackQuery(callbackQuery.getId(), "❌ Эта функция доступна только администраторам");
+                return;
+            }
         }
 
-        // Админские callback'и
+        // Обработка callback'ов
         switch (data) {
             case "schedule_morning" -> showDaySelection(chatId, "morning");
             case "schedule_evening" -> showDaySelection(chatId, "evening");
             case "back_to_schedule" -> showScheduleMenu(chatId);
-            case "back_to_main" -> showMainMenu(chatId, true);
+            case "back_to_main" -> showMainMenu(chatId, isAdminUser);
             default -> {
                 if (data.startsWith("day_")) {
                     handleDaySelection(chatId, data);
@@ -204,6 +206,10 @@ public class YogaBot extends TelegramWebhookBot {
                     handleEditLesson(chatId, data);
                 } else if (data.startsWith("delete_")) {
                     handleDeleteLesson(chatId, data, messageId);
+                } else if (data.startsWith("signup_")) {
+                    handleUserSignup(callbackQuery);
+                } else if (data.startsWith("cancel_")) {
+                    handleUserCancel(callbackQuery);
                 }
             }
         }
@@ -224,6 +230,10 @@ public class YogaBot extends TelegramWebhookBot {
             }
             default -> handleState(chatId, text, userId);
         }
+    }
+
+    private void showMainMenu(Long chatId) {
+        showMainMenu(chatId, isAdmin(chatId));
     }
 
     private void showMainMenu(Long chatId, boolean isAdminUser) {
@@ -470,10 +480,12 @@ public class YogaBot extends TelegramWebhookBot {
         InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
 
+        // Кнопки действий
         List<InlineKeyboardButton> actionRow = new ArrayList<>();
         actionRow.add(createInlineButton("✏️ Изменить", "edit_" + dayOfWeek + "_" + lessonType));
         actionRow.add(createInlineButton("🗑️ Удалить", "delete_" + dayOfWeek + "_" + lessonType));
 
+        // Кнопка назад
         List<InlineKeyboardButton> backRow = new ArrayList<>();
         backRow.add(createInlineButton("🔙 Назад", "schedule_" + lessonType));
 
@@ -493,6 +505,7 @@ public class YogaBot extends TelegramWebhookBot {
     }
 
     private void handleEditLesson(Long chatId, String data) {
+        // data format: "edit_MONDAY_morning"
         String[] parts = data.split("_");
         DayOfWeek dayOfWeek = DayOfWeek.valueOf(parts[1]);
         String lessonType = parts[2];
@@ -501,6 +514,7 @@ public class YogaBot extends TelegramWebhookBot {
         String typeText = lessonType.equals("morning") ? "утреннего" : "вечернего";
         String currentSchedule = fixedSchedule.get(dayOfWeek).get(lessonType);
 
+        // Сохраняем состояние для обработки ввода
         userStates.put(chatId, "editing_" + dayOfWeek + "_" + lessonType);
 
         String text = "✏️ *Изменение " + typeText + " занятия на " + dayName + "*\n\n";
@@ -570,6 +584,7 @@ public class YogaBot extends TelegramWebhookBot {
         String dayName = getRussianDayNameFull(dayOfWeek);
         String typeText = lessonType.equals("morning") ? "утреннее" : "вечернее";
 
+        // Обновляем в памяти
         fixedSchedule.get(dayOfWeek).put(lessonType, newSchedule);
 
         String text = "✅ *" + typeText + " занятие на " + dayName + " обновлено!*\n\n";
@@ -585,6 +600,7 @@ public class YogaBot extends TelegramWebhookBot {
             System.err.println("❌ Ошибка отправки подтверждения: " + e.getMessage());
         }
 
+        // Возвращаем к выбору дня
         try {
             Thread.sleep(1000);
         } catch (InterruptedException e) {
