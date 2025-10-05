@@ -806,7 +806,16 @@ public class YogaBot extends TelegramWebhookBot {
     }
 
     private boolean isAdmin(Long userId) {
-        return adminId != null && adminId.equals(userId.toString());
+        if (adminId == null) return false;
+
+        // Поддерживаем как старый формат (один ID), так и новый (список ID через запятую)
+        String[] adminIds = adminId.split(",");
+        for (String id : adminIds) {
+            if (id.trim().equals(userId.toString())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public void checkServerTime() {
