@@ -73,6 +73,14 @@ public class DatabaseService {
 
     private void createTablesIfNotExists() {
         try {
+            // Удаляем старую таблицу lessons если она существует со старой структурой
+            try {
+                jdbcTemplate.execute("DROP TABLE IF EXISTS lessons");
+                log.info("🗑️ Удалена старая таблица lessons");
+            } catch (Exception e) {
+                log.info("ℹ️ Старой таблицы lessons не существует или уже удалена");
+            }
+
             jdbcTemplate.execute("""
                 CREATE TABLE IF NOT EXISTS lessons (
                     id BIGSERIAL PRIMARY KEY,
@@ -159,6 +167,15 @@ public class DatabaseService {
         Map<DayOfWeek, Map<String, String>> schedule = new HashMap<>();
 
         try {
+            // Проверяем существует ли таблица lessons и колонка day_of_week
+            try {
+                jdbcTemplate.queryForObject("SELECT day_of_week FROM lessons LIMIT 1", String.class);
+            } catch (Exception e) {
+                log.warn("⚠️ Таблица lessons не существует или структура неверна, создаем заново...");
+                createTablesIfNotExists();
+                return schedule; // Возвращаем пустое расписание
+            }
+
             jdbcTemplate.query("SELECT day_of_week, lesson_type, description FROM lessons",
                     rs -> {
                         while (rs.next()) {
@@ -212,8 +229,14 @@ public class DatabaseService {
     public void initializeDefaultSchedule() {
         try {
             // Проверяем, есть ли уже записи
-            Integer count = jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM lessons", Integer.class);
+            Integer count = null;
+            try {
+                count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM lessons", Integer.class);
+            } catch (Exception e) {
+                log.warn("⚠️ Таблица lessons не существует, создаем...");
+                createTablesIfNotExists();
+                count = 0;
+            }
 
             if (count != null && count > 0) {
                 log.info("✅ В БД уже есть расписание, пропускаем инициализацию");
