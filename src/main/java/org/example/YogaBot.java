@@ -59,47 +59,65 @@ public class YogaBot extends TelegramWebhookBot {
     }
 
     private void initializeFixedSchedule() {
-        // Понедельник
-        Map<String, String> monday = new HashMap<>();
-        monday.put("morning", "8:00 - 11:30 - Майсор класс");
-        monday.put("evening", "17:00 - 20:00 - Майсор класс");
-        fixedSchedule.put(DayOfWeek.MONDAY, monday);
+        System.out.println("🔄 Инициализация расписания...");
 
-        // Вторник
-        Map<String, String> tuesday = new HashMap<>();
-        tuesday.put("morning", "8:00 - 11:30 - Майсор класс");
-        tuesday.put("evening", "Отдых");
-        fixedSchedule.put(DayOfWeek.TUESDAY, tuesday);
+        // Сначала инициализируем дефолтное расписание в БД
+        databaseService.initializeDefaultSchedule();
 
-        // Среда
-        Map<String, String> wednesday = new HashMap<>();
-        wednesday.put("morning", "8:00 - 11:30 - Майсор класс");
-        wednesday.put("evening", "18:30 - 20:00 - Майсор класс");
-        fixedSchedule.put(DayOfWeek.WEDNESDAY, wednesday);
+        // Затем загружаем из БД
+        Map<DayOfWeek, Map<String, String>> savedSchedule = databaseService.loadSchedule();
 
-        // Четверг
-        Map<String, String> thursday = new HashMap<>();
-        thursday.put("morning", "8:00 - 11:30 - Майсор класс");
-        thursday.put("evening", "17:00 - 20:00 - Майсор класс");
-        fixedSchedule.put(DayOfWeek.THURSDAY, thursday);
+        if (savedSchedule != null && !savedSchedule.isEmpty()) {
+            fixedSchedule.putAll(savedSchedule);
+            System.out.println("✅ Расписание загружено из БД");
+        } else {
+            // Резервная инициализация (старый код)
+            System.out.println("⚠️ Используется резервное расписание");
 
-        // Пятница
-        Map<String, String> friday = new HashMap<>();
-        friday.put("morning", "8:00 - 11:30 - Майсор класс");
-        friday.put("evening", "17:00 - 20:00 - Майсор класс");
-        fixedSchedule.put(DayOfWeek.FRIDAY, friday);
+            // Понедельник
+            Map<String, String> monday = new HashMap<>();
+            monday.put("morning", "8:00 - 11:30 - Майсор класс");
+            monday.put("evening", "17:00 - 20:00 - Майсор класс");
+            fixedSchedule.put(DayOfWeek.MONDAY, monday);
 
-        // Суббота
-        Map<String, String> saturday = new HashMap<>();
-        saturday.put("morning", "ОТДЫХ");
-        saturday.put("evening", "ОТДЫХ");
-        fixedSchedule.put(DayOfWeek.SATURDAY, saturday);
+            // Вторник
+            Map<String, String> tuesday = new HashMap<>();
+            tuesday.put("morning", "8:00 - 11:30 - Майсор класс");
+            tuesday.put("evening", "Отдых");
+            fixedSchedule.put(DayOfWeek.TUESDAY, tuesday);
 
-        // Воскресенье
-        Map<String, String> sunday = new HashMap<>();
-        sunday.put("morning", "10:00 - 11:30 LED-КЛАСС\n11:30 - 12:00 Конференция (По необходимости)");
-        sunday.put("evening", "Отдых");
-        fixedSchedule.put(DayOfWeek.SUNDAY, sunday);
+            // Среда
+            Map<String, String> wednesday = new HashMap<>();
+            wednesday.put("morning", "8:00 - 11:30 - Майсор класс");
+            wednesday.put("evening", "18:30 - 20:00 - Майсор класс");
+            fixedSchedule.put(DayOfWeek.WEDNESDAY, wednesday);
+
+            // Четверг
+            Map<String, String> thursday = new HashMap<>();
+            thursday.put("morning", "8:00 - 11:30 - Майсор класс");
+            thursday.put("evening", "17:00 - 20:00 - Майсор класс");
+            fixedSchedule.put(DayOfWeek.THURSDAY, thursday);
+
+            // Пятница
+            Map<String, String> friday = new HashMap<>();
+            friday.put("morning", "8:00 - 11:30 - Майсор класс");
+            friday.put("evening", "17:00 - 20:00 - Майсор класс");
+            fixedSchedule.put(DayOfWeek.FRIDAY, friday);
+
+            // Суббота
+            Map<String, String> saturday = new HashMap<>();
+            saturday.put("morning", "ОТДЫХ");
+            saturday.put("evening", "ОТДЫХ");
+            fixedSchedule.put(DayOfWeek.SATURDAY, saturday);
+
+            // Воскресенье
+            Map<String, String> sunday = new HashMap<>();
+            sunday.put("morning", "10:00 - 11:30 LED-КЛАСС\n11:30 - 12:00 Конференция (По необходимости)");
+            sunday.put("evening", "Отдых");
+            fixedSchedule.put(DayOfWeek.SUNDAY, sunday);
+        }
+
+        System.out.println("✅ Расписание инициализировано");
     }
 
     @Override
@@ -150,7 +168,6 @@ public class YogaBot extends TelegramWebhookBot {
         System.out.println("💬 Обработка сообщения от " + userId + " (admin: " + isAdminUser + "): " + text);
 
         // Команды доступные всем пользователям
-        // Команды доступные всем пользователям
         switch (text) {
             case "/start" -> showMainMenu(chatId, isAdminUser);
             case "📅 Расписание" -> showScheduleForUsers(chatId);
@@ -158,7 +175,7 @@ public class YogaBot extends TelegramWebhookBot {
             case "🕒 Проверить время" -> checkAndSendTime(chatId);
             default -> {
                 if (isAdminUser) {
-                    handleAdminMessage(chatId, text, userId);  // ← ВОТ ТУТ ВЫЗОВ
+                    handleAdminMessage(chatId, text, userId);
                 } else {
                     sendMsg(chatId, "❌ Команда не найдена. Используйте кнопки меню.");
                 }
@@ -183,33 +200,46 @@ public class YogaBot extends TelegramWebhookBot {
         String data = callbackQuery.getData();
         Integer messageId = callbackQuery.getMessage().getMessageId();
 
-        System.out.println("🔘 Обработка callback: " + data);
+        System.out.println("🔘 Обработка callback: " + data + " от пользователя " + userId + " (admin: " + isAdminUser + ")");
 
-        // Проверяем права админа для админских функций
-        if (data.startsWith("schedule_") || data.startsWith("edit_") || data.startsWith("delete_") || data.startsWith("back_to_")) {
+        // Проверяем права админа для ВСЕХ функций изменения расписания
+        if (data.startsWith("schedule_") || data.startsWith("day_") || data.startsWith("edit_") ||
+                data.startsWith("delete_") || data.startsWith("back_to_schedule") || data.startsWith("back_to_main")) {
+
             if (!isAdminUser) {
+                System.out.println("⛔ Попытка доступа к админским функциям без прав: " + userId);
                 answerCallbackQuery(callbackQuery.getId(), "❌ Эта функция доступна только администраторам");
                 return;
             }
         }
 
-        // Обработка callback'ов
-        switch (data) {
-            case "schedule_morning" -> showDaySelection(chatId, "morning");
-            case "schedule_evening" -> showDaySelection(chatId, "evening");
-            case "back_to_schedule" -> showScheduleMenu(chatId);
-            case "back_to_main" -> showMainMenu(chatId, isAdminUser);
-            default -> {
-                if (data.startsWith("day_")) {
-                    handleDaySelection(chatId, data);
-                } else if (data.startsWith("edit_")) {
-                    handleEditLesson(chatId, data);
-                } else if (data.startsWith("delete_")) {
-                    handleDeleteLesson(chatId, data, messageId);
-                } else if (data.startsWith("signup_")) {
-                    handleUserSignup(callbackQuery);
-                } else if (data.startsWith("cancel_")) {
-                    handleUserCancel(callbackQuery);
+        // Обработка callback'ов для админа
+        if (isAdminUser) {
+            switch (data) {
+                case "schedule_morning" -> showDaySelection(chatId, "morning");
+                case "schedule_evening" -> showDaySelection(chatId, "evening");
+                case "back_to_schedule" -> showScheduleMenu(chatId);
+                case "back_to_main" -> showMainMenu(chatId, true);
+                default -> {
+                    if (data.startsWith("day_")) {
+                        handleDaySelection(chatId, data);
+                    } else if (data.startsWith("edit_")) {
+                        handleEditLesson(chatId, data);
+                    } else if (data.startsWith("delete_")) {
+                        handleDeleteLesson(chatId, data, messageId);
+                    }
+                }
+            }
+        }
+
+        // Обработка callback'ов для обычных пользователей (запись/отмена)
+        else {
+            switch (data) {
+                case "signup_morning", "signup_evening" -> handleUserSignup(callbackQuery);
+                case "cancel_morning", "cancel_evening" -> handleUserCancel(callbackQuery);
+                default -> {
+                    System.out.println("⛔ Неизвестный callback от пользователя: " + data);
+                    answerCallbackQuery(callbackQuery.getId(), "❌ Неизвестная команда");
                 }
             }
         }
@@ -222,6 +252,7 @@ public class YogaBot extends TelegramWebhookBot {
             case "📅 Расписание" -> showScheduleMenu(chatId);
             case "🔔 Уведомления" -> toggleNotifications(chatId);
             case "📋 Все записи" -> showRegistrations(chatId);
+            case "📊 Логи действий" -> showAdminLogs(chatId);
             case "🧪 Тест уведомлений" -> sendTestNotificationToAdmin(chatId);
             case "🕒 Проверить время" -> checkAndSendTime(chatId);
             case "🚫 Отмена" -> {
@@ -232,8 +263,57 @@ public class YogaBot extends TelegramWebhookBot {
         }
     }
 
-    private void showMainMenu(Long chatId) {
-        showMainMenu(chatId, isAdmin(chatId));
+    private void showAdminLogs(Long chatId) {
+        if (!isAdmin(chatId)) {
+            sendMsg(chatId, "❌ Недостаточно прав");
+            return;
+        }
+
+        try {
+            // Получаем логи из базы данных
+            List<Map<String, Object>> logs = databaseService.getAdminLogs(10); // последние 10 записей
+
+            if (logs.isEmpty()) {
+                sendMsg(chatId, "📊 *Логи действий администраторов*\n\nЛогов действий пока нет.");
+                return;
+            }
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("📊 *Последние действия администраторов:*\n\n");
+
+            for (Map<String, Object> log : logs) {
+                String action = (String) log.get("action");
+                String details = (String) log.get("details");
+                String timestamp = ((java.sql.Timestamp) log.get("created_at")).toLocalDateTime()
+                        .format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
+                Long adminId = (Long) log.get("admin_id");
+
+                sb.append("🕒 *").append(timestamp).append("*\n");
+                sb.append("👤 Admin ID: ").append(adminId).append("\n");
+                sb.append("📝 Действие: ").append(getActionDescription(action)).append("\n");
+
+                if (details != null && !details.isEmpty()) {
+                    sb.append("ℹ️ Детали: ").append(details).append("\n");
+                }
+
+                sb.append("\n");
+            }
+
+            sendMsg(chatId, sb.toString());
+
+        } catch (Exception e) {
+            System.err.println("❌ Ошибка получения логов: " + e.getMessage());
+            sendMsg(chatId, "❌ Ошибка при загрузке логов действий");
+        }
+    }
+
+    private String getActionDescription(String action) {
+        switch (action) {
+            case "CHANGE_SCHEDULE": return "Изменение расписания";
+            case "TOGGLE_NOTIFICATIONS": return "Переключение уведомлений";
+            case "SEND_TEST_NOTIFICATION": return "Тест уведомлений";
+            default: return action;
+        }
     }
 
     private void showMainMenu(Long chatId, boolean isAdminUser) {
@@ -282,6 +362,7 @@ public class YogaBot extends TelegramWebhookBot {
             adminRow1.add("📋 Все записи");
 
             KeyboardRow adminRow2 = new KeyboardRow();
+            adminRow2.add("📊 Логи действий");
             adminRow2.add("🧪 Тест уведомлений");
 
             keyboard.add(adminRow1);
@@ -505,6 +586,12 @@ public class YogaBot extends TelegramWebhookBot {
     }
 
     private void handleEditLesson(Long chatId, String data) {
+        // Дополнительная проверка прав
+        if (!isAdmin(chatId)) {
+            sendMsg(chatId, "❌ Недостаточно прав для изменения расписания");
+            return;
+        }
+
         // data format: "edit_MONDAY_morning"
         String[] parts = data.split("_");
         DayOfWeek dayOfWeek = DayOfWeek.valueOf(parts[1]);
@@ -535,6 +622,12 @@ public class YogaBot extends TelegramWebhookBot {
     }
 
     private void handleDeleteLesson(Long chatId, String data, Integer messageId) {
+        // Дополнительная проверка прав
+        if (!isAdmin(chatId)) {
+            answerCallbackQuery(data, "❌ Недостаточно прав для удаления занятий");
+            return;
+        }
+
         String[] parts = data.split("_");
         DayOfWeek dayOfWeek = DayOfWeek.valueOf(parts[1]);
         String lessonType = parts[2];
@@ -542,7 +635,11 @@ public class YogaBot extends TelegramWebhookBot {
         String dayName = getRussianDayNameFull(dayOfWeek);
         String typeText = lessonType.equals("morning") ? "утреннее" : "вечернее";
 
-        fixedSchedule.get(dayOfWeek).put(lessonType, "Отдых");
+        String deletedSchedule = "Отдых";
+        fixedSchedule.get(dayOfWeek).put(lessonType, deletedSchedule);
+
+        // СОХРАНЯЕМ ИЗМЕНЕНИЕ В БАЗУ ДАННЫХ
+        databaseService.saveSchedule(dayOfWeek, lessonType, deletedSchedule, chatId);
 
         String text = "✅ *" + typeText + " занятие на " + dayName + " удалено!*\n\n";
         text += "Теперь в расписании указано: *Отдых*";
@@ -581,15 +678,25 @@ public class YogaBot extends TelegramWebhookBot {
     }
 
     private void updateLessonSchedule(Long chatId, String newSchedule, DayOfWeek dayOfWeek, String lessonType) {
+        // Проверка прав перед сохранением в БД
+        if (!isAdmin(chatId)) {
+            sendMsg(chatId, "❌ Недостаточно прав для сохранения изменений");
+            userStates.remove(chatId);
+            return;
+        }
+
         String dayName = getRussianDayNameFull(dayOfWeek);
         String typeText = lessonType.equals("morning") ? "утреннее" : "вечернее";
 
         // Обновляем в памяти
         fixedSchedule.get(dayOfWeek).put(lessonType, newSchedule);
 
+        // СОХРАНЯЕМ В БАЗУ ДАННЫХ с логированием
+        databaseService.saveSchedule(dayOfWeek, lessonType, newSchedule, chatId);
+
         String text = "✅ *" + typeText + " занятие на " + dayName + " обновлено!*\n\n";
         text += "📝 *Новое расписание:*\n" + newSchedule + "\n\n";
-        text += "Изменения отразятся в уведомлениях и общем расписании.";
+        text += "Изменения сохранены в базе данных и отразятся в уведомлениях.";
 
         SendMessage message = new SendMessage(chatId.toString(), text);
         message.setParseMode("Markdown");

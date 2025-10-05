@@ -25,5 +25,5 @@ COPY --from=builder /app/target/*.jar app.jar
 
 EXPOSE 8080
 
-# Оптимизированные JVM параметры для Render.com (одной строкой)
-ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-Xmx256m", "-Xss512k", "-XX:+UseG1GC", "-XX:MaxGCPauseMillis=200", "-Dspring.profiles.active=prod", "-Djava.security.egd=file:/dev/./urandom", "-Dspring.datasource.hikari.leak-detection-threshold=60000", "-jar", "app.jar"]
+# Оптимизированные JVM параметры для Render.com
+CMD java -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -Xmx256m -Xss512k -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -Dspring.profiles.active=prod -Djava.security.egd=file:/dev/./urandom -Dspring.datasource.hikari.leak-detection-threshold=60000 -jar app.jar
