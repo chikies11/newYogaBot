@@ -167,14 +167,23 @@ public class DatabaseService {
         Map<DayOfWeek, Map<String, String>> schedule = new HashMap<>();
 
         try {
-            // Проверяем существует ли таблица lessons и колонка day_of_week
-            try {
-                jdbcTemplate.queryForObject("SELECT day_of_week FROM lessons LIMIT 1", String.class);
-            } catch (Exception e) {
-                log.warn("⚠️ Таблица lessons не существует или структура неверна, создаем заново...");
-                createTablesIfNotExists();
-                return schedule; // Возвращаем пустое расписание
-            }
+            // Просто пытаемся загрузить данные, если таблицы нет - вернется пустой результат
+            jdbcTemplate.query("SELECT day_of_week, lesson_type, description FROM lessons",
+                    rs -> {
+                        while (rs.next()) {
+                            try {
+                                DayOfWeek dayOfWeek = DayOfWeek.valueOf(rs.getString("day_of_week"));
+                                String lessonType = rs.getString("lesson_type");
+                                String description = rs.getString("description");
+
+                                schedule.computeIfAbsent(dayOfWeek, k -> new HashMap<>())
+                                        .put(lessonType, description);
+                            } catch (IllegalArgumentException e) {
+                                log.warn("⚠️ Неизвестный день недели в БД: {}", rs.getString("day_of_week"));
+                            }
+                        }
+                        return null;
+                    });
 
             jdbcTemplate.query("SELECT day_of_week, lesson_type, description FROM lessons",
                     rs -> {
@@ -232,6 +241,7 @@ public class DatabaseService {
             Integer count = null;
             try {
                 count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM lessons", Integer.class);
+                log.info("✅ В БД найдено {} записей расписания", count);
             } catch (Exception e) {
                 log.warn("⚠️ Таблица lessons не существует, создаем...");
                 createTablesIfNotExists();
@@ -242,6 +252,8 @@ public class DatabaseService {
                 log.info("✅ В БД уже есть расписание, пропускаем инициализацию");
                 return;
             }
+
+            log.info("🔄 Инициализация дефолтного расписания в БД...");
 
             // Инициализируем дефолтное расписание
             Map<DayOfWeek, Map<String, String>> defaultSchedule = createDefaultSchedule();

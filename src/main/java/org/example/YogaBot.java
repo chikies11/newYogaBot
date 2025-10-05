@@ -76,9 +76,16 @@ public class YogaBot extends TelegramWebhookBot {
         // Затем загружаем из БД
         Map<DayOfWeek, Map<String, String>> savedSchedule = databaseService.loadSchedule();
 
+        System.out.println("📊 Результат загрузки из БД: " + (savedSchedule != null ? savedSchedule.size() : "null") + " дней");
+
         if (savedSchedule != null && !savedSchedule.isEmpty()) {
             fixedSchedule.putAll(savedSchedule);
             System.out.println("✅ Расписание загружено из БД: " + savedSchedule.size() + " дней");
+
+            // Отладочная информация
+            for (Map.Entry<DayOfWeek, Map<String, String>> entry : savedSchedule.entrySet()) {
+                System.out.println("   - " + entry.getKey() + ": " + entry.getValue());
+            }
         } else {
             // Резервная инициализация
             System.out.println("⚠️ Используется резервное расписание");
@@ -292,16 +299,70 @@ public class YogaBot extends TelegramWebhookBot {
                 System.out.println("📅 Админ запросил меню расписания");
                 showScheduleMenu(chatId);
             }
-            case "🔔 Уведомления" -> toggleNotifications(chatId);
-            case "📋 Все записи" -> showRegistrations(chatId);
-            case "📊 Логи действий" -> showAdminLogs(chatId);
-            case "🧪 Тест уведомлений" -> sendTestNotificationToAdmin(chatId);
-            case "🕒 Проверить время" -> checkAndSendTime(chatId);
+            case "🔔 Уведомления" -> {
+                System.out.println("🔔 Админ переключает уведомления");
+                toggleNotifications(chatId);
+            }
+            case "📋 Все записи" -> {
+                System.out.println("📋 Админ запросил все записи");
+                showRegistrations(chatId);
+            }
+            case "📊 Логи действий" -> {
+                System.out.println("📊 Админ запросил логи действий");
+                showAdminLogs(chatId);
+            }
+            case "🧪 Тест уведомлений" -> {
+                System.out.println("🧪 Админ запускает тест уведомлений");
+                sendTestNotificationToAdmin(chatId);
+            }
+            case "🕒 Проверить время" -> {
+                System.out.println("🕒 Админ проверяет время");
+                checkAndSendTime(chatId);
+            }
+            case "/debug_schedule" -> {
+                System.out.println("🐛 Отладочная команда: проверка меню расписания");
+                testScheduleMenu(chatId);
+            }
             case "🚫 Отмена" -> {
+                System.out.println("🚫 Админ отменяет действие");
                 userStates.remove(userId);
                 showMainMenu(chatId, true);
             }
-            default -> handleState(chatId, text, userId);
+            default -> {
+                System.out.println("📝 Админ вводит текст: " + text);
+                handleState(chatId, text, userId);
+            }
+        }
+    }
+
+    private void testScheduleMenu(Long chatId) {
+        try {
+            String text = "🐛 *Тестовое меню расписания*\n\nПроверка inline-кнопок:";
+
+            InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+
+            List<InlineKeyboardButton> row1 = new ArrayList<>();
+            row1.add(createInlineButton("🌅 Тест Утро", "schedule_morning"));
+            row1.add(createInlineButton("🌇 Тест Вечер", "schedule_evening"));
+
+            List<InlineKeyboardButton> row2 = new ArrayList<>();
+            row2.add(createInlineButton("🔙 Тест Назад", "back_to_main"));
+
+            rows.add(row1);
+            rows.add(row2);
+            markup.setKeyboard(rows);
+
+            SendMessage message = new SendMessage(chatId.toString(), text);
+            message.setParseMode("Markdown");
+            message.setReplyMarkup(markup);
+
+            execute(message);
+            System.out.println("✅ Тестовое меню отправлено");
+
+        } catch (Exception e) {
+            System.err.println("❌ Ошибка в тестовом меню: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
@@ -466,32 +527,44 @@ public class YogaBot extends TelegramWebhookBot {
     }
 
     private void showScheduleMenu(Long chatId) {
-        String scheduleText = getWeeklySchedule();
-        String text = "📅 *Расписание на неделю:*\n\n" + scheduleText + "\n\nВыберите раздел для управления:";
-
-        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
-        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-
-        List<InlineKeyboardButton> timeRow = new ArrayList<>();
-        timeRow.add(createInlineButton("🌅 Утро", "schedule_morning"));
-        timeRow.add(createInlineButton("🌇 Вечер", "schedule_evening"));
-
-        List<InlineKeyboardButton> backRow = new ArrayList<>();
-        backRow.add(createInlineButton("🔙 Назад", "back_to_main"));
-
-        rows.add(timeRow);
-        rows.add(backRow);
-        markup.setKeyboard(rows);
-
-        SendMessage message = new SendMessage(chatId.toString(), text);
-        message.setParseMode("Markdown");
-        message.setReplyMarkup(markup);
+        System.out.println("🔄 Начало showScheduleMenu для чата " + chatId);
 
         try {
+            String scheduleText = getWeeklySchedule();
+            String text = "📅 *Расписание на неделю:*\n\n" + scheduleText + "\n\nВыберите раздел для управления:";
+
+            InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+
+            List<InlineKeyboardButton> timeRow = new ArrayList<>();
+            timeRow.add(createInlineButton("🌅 Утро", "schedule_morning"));
+            timeRow.add(createInlineButton("🌇 Вечер", "schedule_evening"));
+
+            List<InlineKeyboardButton> backRow = new ArrayList<>();
+            backRow.add(createInlineButton("🔙 Назад", "back_to_main"));
+
+            rows.add(timeRow);
+            rows.add(backRow);
+            markup.setKeyboard(rows);
+
+            SendMessage message = new SendMessage(chatId.toString(), text);
+            message.setParseMode("Markdown");
+            message.setReplyMarkup(markup);
+
+            System.out.println("✅ Отправляем меню расписания с inline-кнопками");
             execute(message);
             System.out.println("✅ Показано меню расписания для админа " + chatId);
-        } catch (TelegramApiException e) {
-            System.err.println("❌ Ошибка отправки меню расписания: " + e.getMessage());
+
+        } catch (Exception e) {
+            System.err.println("❌ КРИТИЧЕСКАЯ ОШИБКА в showScheduleMenu: " + e.getMessage());
+            e.printStackTrace();
+
+            // Попробуем отправить простое сообщение без клавиатуры
+            try {
+                sendMsg(chatId, "❌ Ошибка при загрузке меню расписания. Попробуйте позже.");
+            } catch (Exception ex) {
+                System.err.println("❌ Даже простое сообщение не отправляется: " + ex.getMessage());
+            }
         }
     }
 
