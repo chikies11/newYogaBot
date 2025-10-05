@@ -1,5 +1,6 @@
 package org.example;
 
+import org.example.service.DatabaseService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import jakarta.annotation.PostConstruct;
@@ -14,8 +15,6 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKe
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
-import java.sql.*;
-import java.sql.Date;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -35,23 +34,19 @@ public class YogaBot extends TelegramWebhookBot {
     @Value("${bot.path:}")
     private String botPath;
 
-    @Value("${spring.datasource.url:}")
-    private String dbUrl;
-
-    @Value("${spring.datasource.username:}")
-    private String dbUsername;
-
-    @Value("${spring.datasource.password:}")
-    private String dbPassword;
-
     @Value("${app.channelId:}")
     private String channelId;
 
     @Value("${app.adminId:}")
     private String adminId;
 
+    private final DatabaseService databaseService;
     private final Map<Long, String> userStates = new HashMap<>();
     private final Map<DayOfWeek, Map<String, String>> fixedSchedule = new HashMap<>();
+
+    public YogaBot(DatabaseService databaseService) {
+        this.databaseService = databaseService;
+    }
 
     @PostConstruct
     public void postConstruct() {
@@ -60,12 +55,6 @@ public class YogaBot extends TelegramWebhookBot {
         System.out.println("Channel ID: " + channelId);
 
         initializeFixedSchedule();
-
-        if (dbUrl != null && !dbUrl.isEmpty() && dbUsername != null && dbPassword != null) {
-            initDb();
-        } else {
-            System.out.println("⚠️ Database не настроен, пропускаем инициализацию БД");
-        }
         System.out.println("✅ YogaBot инициализирован");
     }
 
@@ -164,7 +153,7 @@ public class YogaBot extends TelegramWebhookBot {
             case "🔔 Уведомления" -> toggleNotifications(chatId);
             case "📋 Запись" -> showRegistrations(chatId);
             case "🧪 Тест уведомлений" -> sendTestNotificationToAdmin(chatId);
-            case "🕒 Проверить время" -> checkAndSendTime(chatId); // Добавьте эту строку
+            case "🕒 Проверить время" -> checkAndSendTime(chatId);
             case "🚫 Отмена" -> {
                 userStates.remove(userId);
                 showMainMenu(chatId);
@@ -173,7 +162,6 @@ public class YogaBot extends TelegramWebhookBot {
         }
     }
 
-    // Добавьте этот метод
     private void checkAndSendTime(Long chatId) {
         checkServerTime();
         String timeInfo = "🕒 *Информация о времени:*\n\n" +
@@ -246,14 +234,13 @@ public class YogaBot extends TelegramWebhookBot {
         KeyboardRow row3 = new KeyboardRow();
         row3.add("🧪 Тест уведомлений");
 
-        // Временная кнопка для отладки времени
         KeyboardRow row4 = new KeyboardRow();
         row4.add("🕒 Проверить время");
 
         keyboard.add(row1);
         keyboard.add(row2);
         keyboard.add(row3);
-        keyboard.add(row4); // Добавляем новую кнопку
+        keyboard.add(row4);
 
         keyboardMarkup.setKeyboard(keyboard);
         return keyboardMarkup;
@@ -513,94 +500,49 @@ public class YogaBot extends TelegramWebhookBot {
     }
 
     private void toggleNotifications(Long chatId) {
-        try (Connection conn = getConnection()) {
-            Statement stmt = conn.createStatement();
-            ResultSet rs = stmt.executeQuery("SELECT notifications_enabled FROM bot_settings WHERE id = 1");
+        boolean newState = databaseService.toggleNotifications();
 
-            boolean currentState = true;
-            if (rs.next()) {
-                currentState = rs.getBoolean("notifications_enabled");
-            }
+        String text = newState ?
+                "🔔 *Уведомления включены!*\n\nАвтоматические уведомления будут отправляться в канал:\n• Утренние - в 12:00 МСК\n• Вечерние - в 18:00 МСК\n• Отсутствие занятий - в 14:00 МСК" :
+                "🔕 *Уведомления отключены!*\n\nАвтоматические уведомления не будут отправляться в канал.";
 
-            PreparedStatement updateStmt = conn.prepareStatement(
-                    "INSERT INTO bot_settings (id, notifications_enabled) VALUES (1, ?) ON CONFLICT (id) DO UPDATE SET notifications_enabled = ?"
-            );
-            boolean newState = !currentState;
-            updateStmt.setBoolean(1, newState);
-            updateStmt.setBoolean(2, newState);
-            updateStmt.executeUpdate();
-
-            String text = newState ?
-                    "🔔 *Уведомления включены!*\n\nАвтоматические уведомления будут отправляться в канал:\n• Утренние - в 12:00 МСК\n• Вечерние - в 18:00 МСК\n• Отсутствие занятий - в 14:00 МСК" :
-                    "🔕 *Уведомления отключены!*\n\nАвтоматические уведомления не будут отправляться в канал.";
-
-            SendMessage message = new SendMessage(chatId.toString(), text);
-            message.setParseMode("Markdown");
-            execute(message);
-
-        } catch (Exception e) {
-            System.err.println("❌ Ошибка переключения уведомлений: " + e.getMessage());
-            sendMsg(chatId, "❌ Ошибка при изменении настроек уведомлений");
-        }
+        sendMsg(chatId, text);
     }
 
     private void showRegistrations(Long chatId) {
         LocalDate tomorrow = LocalDate.now().plusDays(1);
+        Map<String, List<String>> registrations = databaseService.getRegistrationsForDate(tomorrow);
+
         StringBuilder sb = new StringBuilder();
+        sb.append("📋 *Записи на завтра (").append(tomorrow.format(DateTimeFormatter.ofPattern("dd.MM"))).append(")*\n\n");
 
-        try (Connection conn = getConnection()) {
-            PreparedStatement stmt = conn.prepareStatement("""
-                SELECT lesson_type, display_name 
-                FROM registrations 
-                WHERE lesson_date = ? 
-                ORDER BY lesson_type, created_at
-            """);
-            stmt.setDate(1, Date.valueOf(tomorrow));
-            ResultSet rs = stmt.executeQuery();
-
-            Map<String, List<String>> registrations = new HashMap<>();
-            registrations.put("morning", new ArrayList<>());
-            registrations.put("evening", new ArrayList<>());
-
-            while (rs.next()) {
-                String lessonType = rs.getString("lesson_type");
-                String displayName = rs.getString("display_name");
-                registrations.get(lessonType).add(displayName);
+        sb.append("🌅 *Утренняя практика:*\n");
+        if (registrations.get("morning").isEmpty()) {
+            sb.append("Записей пока нет\n\n");
+        } else {
+            int counter = 1;
+            for (String name : registrations.get("morning")) {
+                sb.append(counter).append(". ").append(name).append("\n");
+                counter++;
             }
-
-            sb.append("📋 *Записи на завтра (").append(tomorrow.format(DateTimeFormatter.ofPattern("dd.MM"))).append(")*\n\n");
-
-            sb.append("🌅 *Утренняя практика:*\n");
-            if (registrations.get("morning").isEmpty()) {
-                sb.append("Записей пока нет\n\n");
-            } else {
-                int counter = 1;
-                for (String name : registrations.get("morning")) {
-                    sb.append(counter).append(". ").append(name).append("\n");
-                    counter++;
-                }
-                sb.append("\n");
-            }
-
-            sb.append("🌇 *Вечерняя практика:*\n");
-            if (registrations.get("evening").isEmpty()) {
-                sb.append("Записей пока нет");
-            } else {
-                int counter = 1;
-                for (String name : registrations.get("evening")) {
-                    sb.append(counter).append(". ").append(name).append("\n");
-                    counter++;
-                }
-            }
-
-            sb.append("\n\n📊 *Статистика:*\n");
-            sb.append("• Утренние: ").append(registrations.get("morning").size()).append(" чел.\n");
-            sb.append("• Вечерние: ").append(registrations.get("evening").size()).append(" чел.\n");
-            sb.append("• Всего: ").append(registrations.get("morning").size() + registrations.get("evening").size()).append(" чел.");
-
-        } catch (SQLException e) {
-            sb.append("❌ Ошибка загрузки записей");
+            sb.append("\n");
         }
+
+        sb.append("🌇 *Вечерняя практика:*\n");
+        if (registrations.get("evening").isEmpty()) {
+            sb.append("Записей пока нет");
+        } else {
+            int counter = 1;
+            for (String name : registrations.get("evening")) {
+                sb.append(counter).append(". ").append(name).append("\n");
+                counter++;
+            }
+        }
+
+        sb.append("\n\n📊 *Статистика:*\n");
+        sb.append("• Утренние: ").append(registrations.get("morning").size()).append(" чел.\n");
+        sb.append("• Вечерние: ").append(registrations.get("evening").size()).append(" чел.\n");
+        sb.append("• Всего: ").append(registrations.get("morning").size() + registrations.get("evening").size()).append(" чел.");
 
         sendMsg(chatId, sb.toString());
     }
@@ -736,6 +678,11 @@ public class YogaBot extends TelegramWebhookBot {
             return;
         }
 
+        if (!databaseService.areNotificationsEnabled()) {
+            System.out.println("🔕 Уведомления отключены в настройках");
+            return;
+        }
+
         LocalDate tomorrow = LocalDate.now().plusDays(1);
         LocalTime now = LocalTime.now();
 
@@ -743,47 +690,27 @@ public class YogaBot extends TelegramWebhookBot {
         System.out.println("🕒 Текущее время UTC: " + now);
         System.out.println("🕒 Текущее время МСК: " + now.plusHours(3));
 
-        try (Connection conn = getConnection()) {
-            Statement checkStmt = conn.createStatement();
-            ResultSet settingsRs = checkStmt.executeQuery("SELECT notifications_enabled FROM bot_settings WHERE id = 1");
+        Map<String, String> tomorrowSchedule = getTomorrowSchedule(tomorrow);
+        String morningLesson = tomorrowSchedule.get("morning");
+        String eveningLesson = tomorrowSchedule.get("evening");
 
-            if (!settingsRs.next() || !settingsRs.getBoolean("notifications_enabled")) {
-                System.out.println("🔕 Уведомления отключены в настройках");
-                return;
-            }
-            System.out.println("✅ Уведомления включены в настройках");
+        // Определяем тип уведомления по времени
+        int hour = now.getHour();
+        int minute = now.getMinute();
 
-            Map<String, String> tomorrowSchedule = getTomorrowSchedule(tomorrow);
+        System.out.println("⏰ Проверка времени: " + hour + ":" + minute);
 
-            String morningLesson = tomorrowSchedule.get("morning");
-            String eveningLesson = tomorrowSchedule.get("evening");
-
-            System.out.println("📅 Расписание на завтра:");
-            System.out.println("Утро: " + morningLesson);
-            System.out.println("Вечер: " + eveningLesson);
-
-            // Определяем тип уведомления по времени
-            int hour = now.getHour();
-            int minute = now.getMinute();
-
-            System.out.println("⏰ Проверка времени: " + hour + ":" + minute);
-
-            if (hour == 9 && minute == 0) { // 12:00 МСК
-                System.out.println("🌅 Отправка утреннего уведомления...");
-                sendMorningNotification(morningLesson);
-            } else if (hour == 15 && minute == 0) { // 18:00 МСК
-                System.out.println("🌇 Отправка вечернего уведомления...");
-                sendEveningNotification(eveningLesson);
-            } else if (hour == 11 && minute == 0) { // 14:00 МСК
-                System.out.println("📝 Отправка уведомления об отсутствии занятий...");
-                sendNoClassesNotification(morningLesson, eveningLesson);
-            } else {
-                System.out.println("⏰ Не время для уведомлений");
-            }
-
-        } catch (Exception e) {
-            System.err.println("❌ Ошибка отправки уведомлений: " + e.getMessage());
-            e.printStackTrace();
+        if (hour == 9 && minute == 0) { // 12:00 МСК
+            System.out.println("🌅 Отправка утреннего уведомления...");
+            sendMorningNotification(morningLesson);
+        } else if (hour == 15 && minute == 0) { // 18:00 МСК
+            System.out.println("🌇 Отправка вечернего уведомления...");
+            sendEveningNotification(eveningLesson);
+        } else if (hour == 11 && minute == 0) { // 14:00 МСК
+            System.out.println("📝 Отправка уведомления об отсутствии занятий...");
+            sendNoClassesNotification(morningLesson, eveningLesson);
+        } else {
+            System.out.println("⏰ Не время для уведомлений");
         }
     }
 
@@ -820,83 +747,30 @@ public class YogaBot extends TelegramWebhookBot {
 
         String displayName = username != null ? "@" + username : firstName;
         String lessonType = data.substring(7);
-
         LocalDate tomorrow = LocalDate.now().plusDays(1);
 
-        try (Connection conn = getConnection()) {
-            PreparedStatement checkStmt = conn.prepareStatement(
-                    "SELECT id FROM registrations WHERE user_id = ? AND lesson_date = ? AND lesson_type = ?"
-            );
-            checkStmt.setLong(1, userId);
-            checkStmt.setDate(2, Date.valueOf(tomorrow));
-            checkStmt.setString(3, lessonType);
-            ResultSet rs = checkStmt.executeQuery();
+        boolean success = databaseService.registerUser(userId, username, displayName, tomorrow, lessonType);
 
-            if (!rs.next()) {
-                PreparedStatement insertStmt = conn.prepareStatement(
-                        "INSERT INTO registrations (user_id, username, display_name, lesson_date, lesson_type) VALUES (?, ?, ?, ?, ?)"
-                );
-                insertStmt.setLong(1, userId);
-                insertStmt.setString(2, username);
-                insertStmt.setString(3, displayName);
-                insertStmt.setDate(4, Date.valueOf(tomorrow));
-                insertStmt.setString(5, lessonType);
-                insertStmt.executeUpdate();
+        String answer = success ?
+                "✅ Вы записаны на " + (lessonType.equals("morning") ? "утреннюю" : "вечернюю") + " практику!" :
+                "❌ Вы уже записаны на это занятие!";
 
-                String answer = "✅ Вы записаны на " + (lessonType.equals("morning") ? "утреннюю" : "вечернюю") + " практику!";
-                answerCallbackQuery(callbackQuery.getId(), answer);
-            } else {
-                answerCallbackQuery(callbackQuery.getId(), "❌ Вы уже записаны на это занятие!");
-            }
-        } catch (SQLException e) {
-            System.err.println("❌ Ошибка записи пользователя: " + e.getMessage());
-            answerCallbackQuery(callbackQuery.getId(), "❌ Произошла ошибка при записи");
-        }
+        answerCallbackQuery(callbackQuery.getId(), answer);
     }
 
     private void handleUserCancel(org.telegram.telegrambots.meta.api.objects.CallbackQuery callbackQuery) {
         String data = callbackQuery.getData();
         Long userId = callbackQuery.getFrom().getId();
-        String username = callbackQuery.getFrom().getUserName();
-        String firstName = callbackQuery.getFrom().getFirstName();
-
-        String displayName = username != null ? "@" + username : firstName;
         String lessonType = data.substring(7);
-
         LocalDate tomorrow = LocalDate.now().plusDays(1);
 
-        try (Connection conn = getConnection()) {
-            PreparedStatement checkStmt = conn.prepareStatement(
-                    "SELECT id FROM registrations WHERE user_id = ? AND lesson_date = ? AND lesson_type = ?"
-            );
-            checkStmt.setLong(1, userId);
-            checkStmt.setDate(2, Date.valueOf(tomorrow));
-            checkStmt.setString(3, lessonType);
-            ResultSet rs = checkStmt.executeQuery();
+        boolean success = databaseService.cancelRegistration(userId, tomorrow, lessonType);
 
-            if (rs.next()) {
-                PreparedStatement deleteStmt = conn.prepareStatement(
-                        "DELETE FROM registrations WHERE user_id = ? AND lesson_date = ? AND lesson_type = ?"
-                );
-                deleteStmt.setLong(1, userId);
-                deleteStmt.setDate(2, Date.valueOf(tomorrow));
-                deleteStmt.setString(3, lessonType);
-                int deletedRows = deleteStmt.executeUpdate();
+        String answer = success ?
+                "❌ Запись на " + (lessonType.equals("morning") ? "утреннюю" : "вечернюю") + " практику отменена!" :
+                "❌ Вы не записаны на это занятие!";
 
-                if (deletedRows > 0) {
-                    String answer = "❌ Запись на " + (lessonType.equals("morning") ? "утреннюю" : "вечернюю") + " практику отменена!";
-                    answerCallbackQuery(callbackQuery.getId(), answer);
-                    System.out.println("✅ Пользователь " + displayName + " отменил запись на " + lessonType);
-                } else {
-                    answerCallbackQuery(callbackQuery.getId(), "❌ Не удалось отменить запись");
-                }
-            } else {
-                answerCallbackQuery(callbackQuery.getId(), "❌ Вы не записаны на это занятие!");
-            }
-        } catch (SQLException e) {
-            System.err.println("❌ Ошибка отмены записи пользователя: " + e.getMessage());
-            answerCallbackQuery(callbackQuery.getId(), "❌ Произошла ошибка при отмене записи");
-        }
+        answerCallbackQuery(callbackQuery.getId(), answer);
     }
 
     private void answerCallbackQuery(String callbackQueryId, String text) {
@@ -921,66 +795,10 @@ public class YogaBot extends TelegramWebhookBot {
         }
     }
 
-    private Connection getConnection() throws SQLException {
-        System.out.println("🔗 Подключение к БД...");
-        return DriverManager.getConnection(dbUrl, dbUsername, dbPassword);
-    }
-
     private InlineKeyboardButton createInlineButton(String text, String callbackData) {
         InlineKeyboardButton button = new InlineKeyboardButton(text);
         button.setCallbackData(callbackData);
         return button;
-    }
-
-    private void initDb() {
-        System.out.println("🔄 Инициализация базы данных...");
-
-        try (Connection conn = getConnection()) {
-            Statement st = conn.createStatement();
-
-            st.executeUpdate("""
-                CREATE TABLE IF NOT EXISTS lessons (
-                    id BIGSERIAL PRIMARY KEY,
-                    lesson_date DATE NOT NULL,
-                    lesson_type VARCHAR(10) NOT NULL,
-                    description TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(lesson_date, lesson_type)
-                )
-            """);
-
-            st.executeUpdate("""
-                CREATE TABLE IF NOT EXISTS registrations (
-                    id BIGSERIAL PRIMARY KEY,
-                    user_id BIGINT NOT NULL,
-                    username VARCHAR(255),
-                    display_name VARCHAR(255) NOT NULL,
-                    lesson_date DATE NOT NULL,
-                    lesson_type VARCHAR(10) NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(user_id, lesson_date, lesson_type)
-                )
-            """);
-
-            st.executeUpdate("""
-                CREATE TABLE IF NOT EXISTS bot_settings (
-                    id INTEGER PRIMARY KEY,
-                    notifications_enabled BOOLEAN DEFAULT true,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """);
-
-            st.executeUpdate("""
-                INSERT INTO bot_settings (id, notifications_enabled) 
-                VALUES (1, true) 
-                ON CONFLICT (id) DO NOTHING
-            """);
-
-            System.out.println("✅ База данных инициализирована");
-        } catch (SQLException e) {
-            System.err.println("❌ Ошибка инициализации БД: " + e.getMessage());
-            e.printStackTrace();
-        }
     }
 
     private boolean isAdmin(Long userId) {
