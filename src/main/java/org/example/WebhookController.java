@@ -108,22 +108,6 @@ public class WebhookController {
         }
     }
 
-    @GetMapping("/force-notification")
-    public ResponseEntity<String> forceNotification() {
-        try {
-            // Принудительно запускаем уведомления
-            bot.sendDailyNotifications();
-            return ResponseEntity.ok("""
-            🔔 Принудительная отправка уведомлений запущена!
-            
-            Проверьте логи в Render для отладки.
-            Должны отправиться уведомления согласно текущему времени.
-            """);
-        } catch (Exception e) {
-            return ResponseEntity.status(500).body("❌ Ошибка: " + e.getMessage());
-        }
-    }
-
     @GetMapping("/debug-time")
     public ResponseEntity<Map<String, String>> debugTime() {
         // Вызываем метод проверки времени
