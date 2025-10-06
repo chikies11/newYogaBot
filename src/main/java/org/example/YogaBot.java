@@ -15,10 +15,7 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKe
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
-import java.time.DayOfWeek;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
+import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
@@ -219,11 +216,16 @@ public class YogaBot extends TelegramWebhookBot {
 
     private void checkAndSendTime(Long chatId) {
         checkServerTime();
+
+        Instant now = Instant.now();
+        LocalDateTime utcTime = LocalDateTime.ofInstant(now, ZoneOffset.UTC);
+        LocalDateTime moscowTime = LocalDateTime.ofInstant(now, ZoneId.of("Europe/Moscow"));
+
         String timeInfo = "🕒 *Информация о времени:*\n\n" +
-                "Сервер (UTC): " + LocalDateTime.now() + "\n" +
-                "Москва (UTC+3): " + LocalDateTime.now().plusHours(3) + "\n" +
-                "Час сервера: " + LocalDateTime.now().getHour() + "\n" +
-                "Час Москвы: " + LocalDateTime.now().plusHours(3).getHour();
+                "Сервер (UTC): " + utcTime + "\n" +
+                "Москва (UTC+3): " + moscowTime + "\n" +
+                "Час сервера: " + utcTime.getHour() + "\n" +
+                "Час Москвы: " + moscowTime.getHour();
 
         sendMsg(chatId, timeInfo);
     }
