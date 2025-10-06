@@ -3,7 +3,9 @@ package org.example;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Map;
 
 @Component
 public class NotificationScheduler {
@@ -15,30 +17,52 @@ public class NotificationScheduler {
     }
 
     // Утреннее уведомление в 16:00 МСК = 13:00 UTC
+    // Все уведомления в 16:00 МСК = 13:00 UTC с задержками
     @Scheduled(cron = "0 0 13 * * ?")
-    public void sendMorningNotification() {
-        System.out.println("⏰ [SCHEDULER] Отправка утреннего уведомления в 12:00 МСК (9:00 UTC)...");
-        System.out.println("⏰ [SCHEDULER] Текущее время UTC: " + LocalDateTime.now());
-        System.out.println("⏰ [SCHEDULER] Текущее время МСК: " + LocalDateTime.now().plusHours(3));
-        yogaBot.sendDailyNotifications();
-    }
+    public void sendAllNotifications() {
+        System.out.println("⏰ [SCHEDULER] Отправка всех уведомлений в 16:00 МСК (13:00 UTC)...");
 
-    // Уведомление об отсутствии занятий в 16:00 МСК = 13:00 UTC
-    @Scheduled(cron = "0 0 13 * * ?")
-    public void sendNoClassesNotification() {
-        System.out.println("⏰ [SCHEDULER] Проверка отсутствия занятий в 14:00 МСК (11:00 UTC)...");
-        System.out.println("⏰ [SCHEDULER] Текущее время UTC: " + LocalDateTime.now());
-        System.out.println("⏰ [SCHEDULER] Текущее время МСК: " + LocalDateTime.now().plusHours(3));
-        yogaBot.sendDailyNotifications();
-    }
+        LocalDate tomorrow = LocalDate.now().plusDays(1);
+        Map<String, String> tomorrowSchedule = yogaBot.getTomorrowSchedule(tomorrow);
+        String morningLesson = tomorrowSchedule.get("morning");
+        String eveningLesson = tomorrowSchedule.get("evening");
 
-    // Вечернее уведомление в 16:00 МСК = 13:00 UTC
-    @Scheduled(cron = "0 0 13 * * ?")
-    public void sendEveningNotification() {
-        System.out.println("⏰ [SCHEDULER] Отправка вечернего уведомления в 18:00 МСК (15:00 UTC)...");
-        System.out.println("⏰ [SCHEDULER] Текущее время UTC: " + LocalDateTime.now());
-        System.out.println("⏰ [SCHEDULER] Текущее время МСК: " + LocalDateTime.now().plusHours(3));
-        yogaBot.sendDailyNotifications();
+        // Проверяем занятия
+        boolean hasMorning = morningLesson != null && !morningLesson.equals("ОТДЫХ") && !morningLesson.equals("Отдых");
+        boolean hasEvening = eveningLesson != null && !eveningLesson.equals("ОТДЫХ") && !eveningLesson.equals("Отдых");
+
+        System.out.println("📊 На завтра: утро=" + hasMorning + ", вечер=" + hasEvening);
+
+        if (hasMorning) {
+            System.out.println("🌅 Отправка утреннего уведомления...");
+            yogaBot.sendMorningNotification(morningLesson);
+
+            // Задержка 1 минута перед вечерним
+            try {
+                System.out.println("⏳ Ждем 1 минуту перед вечерним уведомлением...");
+                Thread.sleep(60000); // 60 секунд
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+
+        if (hasEvening) {
+            System.out.println("🌇 Отправка вечернего уведомления...");
+            yogaBot.sendEveningNotification(eveningLesson);
+        }
+
+        // Если нет занятий вообще - отправляем уведомление об отсутствии через 5 минут
+        if (!hasMorning && !hasEvening) {
+            try {
+                System.out.println("⏳ Ждем 5 минут перед уведомлением об отсутствии...");
+                Thread.sleep(300000); // 5 минут
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+
+            System.out.println("📝 Отправка уведомления об отсутствии занятий...");
+            yogaBot.sendNoClassesNotification(morningLesson, eveningLesson);
+        }
     }
 
     // Тестовый запуск каждые 30 минут для отладки

@@ -1019,7 +1019,7 @@ public class YogaBot extends TelegramWebhookBot {
         }
     }
 
-    private Map<String, String> getTomorrowSchedule(LocalDate tomorrow) {
+    public Map<String, String> getTomorrowSchedule(LocalDate tomorrow) {
         Map<String, String> schedule = new HashMap<>();
         DayOfWeek dayOfWeek = tomorrow.getDayOfWeek();
 
@@ -1029,7 +1029,7 @@ public class YogaBot extends TelegramWebhookBot {
         return schedule;
     }
 
-    private void sendMorningNotification(String morningLesson) {
+    public void sendMorningNotification(String morningLesson) {
         if (morningLesson == null || morningLesson.equals("ОТДЫХ") || morningLesson.equals("Отдых")) {
             sendToChannel("🌅 На завтра утренних занятий нет");
             return;
@@ -1048,7 +1048,7 @@ public class YogaBot extends TelegramWebhookBot {
         sendToChannel(text, markup);
     }
 
-    private void sendEveningNotification(String eveningLesson) {
+    public void sendEveningNotification(String eveningLesson) {
         if (eveningLesson == null || eveningLesson.equals("ОТДЫХ") || eveningLesson.equals("Отдых")) {
             sendToChannel("🌇 На завтра вечерних занятий нет");
             return;
@@ -1067,7 +1067,7 @@ public class YogaBot extends TelegramWebhookBot {
         sendToChannel(text, markup);
     }
 
-    private void sendNoClassesNotification(String morningLesson, String eveningLesson) {
+    public void sendNoClassesNotification(String morningLesson, String eveningLesson) {
         boolean hasMorning = morningLesson != null && !morningLesson.equals("ОТДЫХ") && !morningLesson.equals("Отдых");
         boolean hasEvening = eveningLesson != null && !eveningLesson.equals("ОТДЫХ") && !eveningLesson.equals("Отдых");
 
@@ -1082,87 +1082,6 @@ public class YogaBot extends TelegramWebhookBot {
         } else {
             // Если оба занятия есть, не отправляем ничего
             System.out.println("✅ Оба занятия есть, уведомление не требуется");
-        }
-    }
-
-    public void sendDailyNotifications() {
-        System.out.println("🔔 Запуск sendDailyNotifications...");
-
-        if (channelId == null || channelId.isEmpty()) {
-            System.out.println("⚠️ Channel ID не настроен: " + channelId);
-            return;
-        }
-
-        if (!databaseService.areNotificationsEnabled()) {
-            System.out.println("🔕 Уведомления отключены в настройках");
-            return;
-        }
-
-        LocalDate tomorrow = LocalDate.now().plusDays(1);
-        LocalTime now = LocalTime.now();
-
-        System.out.println("📅 Завтра: " + tomorrow);
-        System.out.println("🕒 Текущее время UTC: " + now);
-        System.out.println("🕒 Текущее время МСК: " + now.plusHours(3));
-
-        Map<String, String> tomorrowSchedule = getTomorrowSchedule(tomorrow);
-        String morningLesson = tomorrowSchedule.get("morning");
-        String eveningLesson = tomorrowSchedule.get("evening");
-
-        // Проверяем, есть ли занятия на завтра
-        boolean hasMorning = morningLesson != null && !morningLesson.equals("ОТДЫХ") && !morningLesson.equals("Отдых");
-        boolean hasEvening = eveningLesson != null && !eveningLesson.equals("ОТДЫХ") && !eveningLesson.equals("Отдых");
-
-        System.out.println("📊 На завтра: утро=" + hasMorning + ", вечер=" + hasEvening);
-
-        // Определяем тип уведомления по времени
-        int hour = now.getHour();
-        int minute = now.getMinute();
-
-        System.out.println("⏰ Проверка времени: " + hour + ":" + minute);
-
-        if (hour == 13 && minute == 0) { // 16:00 МСК
-            System.out.println("⏰ Время отправки уведомлений 16:00 МСК...");
-
-            if (hasMorning && hasEvening) {
-                // Есть оба занятия - отправляем оба уведомления с задержкой
-                System.out.println("🌅🌇 Отправка ОБОИХ уведомлений (утро+вечер)...");
-
-                // Сначала утреннее
-                System.out.println("🌅 Отправка утреннего уведомления...");
-                sendMorningNotification(morningLesson);
-
-                // Задержка 5 секунд
-                try {
-                    System.out.println("⏳ Ждем 5 секунд...");
-                    Thread.sleep(5000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-
-                // Затем вечернее
-                System.out.println("🌇 Отправка вечернего уведомления...");
-                sendEveningNotification(eveningLesson);
-
-            } else if (hasMorning) {
-                // Только утреннее
-                System.out.println("🌅 Отправка только утреннего уведомления...");
-                sendMorningNotification(morningLesson);
-            } else if (hasEvening) {
-                // Только вечернее
-                System.out.println("🌇 Отправка только вечернего уведомления...");
-                sendEveningNotification(eveningLesson);
-            } else {
-                // Нет занятий
-                System.out.println("📝 Нет занятий на завтра, отправка уведомления об отсутствии...");
-                sendNoClassesNotification(morningLesson, eveningLesson);
-            }
-
-        } else if (hour == 11 && minute == 0) { // 14:00 МСК - только проверка отсутствия
-            System.out.println("📝 Проверка отсутствия занятий в 14:00 МСК...");
-            sendNoClassesNotification(morningLesson, eveningLesson);
-        } else {
-            System.out.println("⏰ Не время для уведомлений");
         }
     }
 
