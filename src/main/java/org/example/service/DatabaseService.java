@@ -73,7 +73,7 @@ public class DatabaseService {
 
     private void createTablesIfNotExists() {
         try {
-            // Удаляем старую таблицу lessons если она существует со старой структурой
+            // Удаляем старую таблицу если она существует со старой структурой
             try {
                 jdbcTemplate.execute("DROP TABLE IF EXISTS lessons");
                 log.info("🗑️ Удалена старая таблица lessons");
@@ -81,17 +81,18 @@ public class DatabaseService {
                 log.info("ℹ️ Старой таблицы lessons не существует или уже удалена");
             }
 
+            // СОЗДАЕМ ТАБЛИЦУ С ПРАВИЛЬНОЙ СТРУКТУРОЙ
             jdbcTemplate.execute("""
-                CREATE TABLE IF NOT EXISTS lessons (
-                    id BIGSERIAL PRIMARY KEY,
-                    day_of_week VARCHAR(20) NOT NULL,
-                    lesson_type VARCHAR(10) NOT NULL,
-                    description TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(day_of_week, lesson_type)
-                )
-            """);
+            CREATE TABLE IF NOT EXISTS lessons (
+                id BIGSERIAL PRIMARY KEY,
+                day_of_week VARCHAR(20) NOT NULL,
+                lesson_type VARCHAR(10) NOT NULL,
+                description TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(day_of_week, lesson_type)
+            )
+        """);
 
             jdbcTemplate.execute("""
                 CREATE TABLE IF NOT EXISTS registrations (
