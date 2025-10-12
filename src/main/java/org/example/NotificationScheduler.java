@@ -18,7 +18,7 @@ public class NotificationScheduler {
 
     // Утреннее уведомление в 16:00 МСК = 13:00 UTC
     // Все уведомления в 16:00 МСК = 13:00 UTC с задержками
-    @Scheduled(cron = "0 0 13 * * ?")
+    @Scheduled(cron = "0 0 16 * * ?")
     public void sendAllNotifications() {
         System.out.println("⏰ [SCHEDULER] Отправка всех уведомлений в 16:00 МСК (13:00 UTC)...");
 
