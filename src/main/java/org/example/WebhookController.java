@@ -107,17 +107,4 @@ public class WebhookController {
             return ResponseEntity.status(500).body("❌ Ошибка: " + e.getMessage());
         }
     }
-
-    @GetMapping("/debug-time")
-    public ResponseEntity<Map<String, String>> debugTime() {
-        // Вызываем метод проверки времени
-        bot.checkServerTime();
-
-        Map<String, String> timeInfo = new HashMap<>();
-        timeInfo.put("server_time_utc", LocalDateTime.now().toString());
-        timeInfo.put("server_time_msk", LocalDateTime.now().plusHours(3).toString());
-        timeInfo.put("tomorrow", LocalDate.now().plusDays(1).toString());
-
-        return ResponseEntity.ok(timeInfo);
-    }
 }

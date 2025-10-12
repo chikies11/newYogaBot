@@ -216,9 +216,8 @@ public class YogaBot extends TelegramWebhookBot {
     private void checkAndSendTime(Long chatId) {
         checkServerTime();
 
-        Instant now = Instant.now();
-        LocalDateTime utcTime = LocalDateTime.ofInstant(now, ZoneOffset.UTC);
-        LocalDateTime moscowTime = LocalDateTime.ofInstant(now, ZoneId.of("Europe/Moscow"));
+        LocalDateTime utcTime = LocalDateTime.now(ZoneOffset.UTC);
+        LocalDateTime moscowTime = LocalDateTime.now(ZoneId.of("Europe/Moscow"));
 
         String timeInfo = "🕒 *Информация о времени:*\n\n" +
                 "Сервер (UTC): " + utcTime + "\n" +
@@ -227,6 +226,25 @@ public class YogaBot extends TelegramWebhookBot {
                 "Час Москвы: " + moscowTime.getHour();
 
         sendMsg(chatId, timeInfo);
+    }
+
+    public void checkServerTime() {
+        LocalDateTime utcTime = LocalDateTime.now(ZoneOffset.UTC);
+        LocalDateTime moscowTime = LocalDateTime.now(ZoneId.of("Europe/Moscow"));
+
+        System.out.println("🕒 Текущее время сервера (UTC): " + utcTime);
+        System.out.println("🕒 Текущее время Moscow (UTC+3): " + moscowTime);
+        System.out.println("🕒 Текущий час (UTC): " + utcTime.getHour());
+        System.out.println("🕒 Текущий час (Moscow): " + moscowTime.getHour());
+        System.out.println("🕒 Текущая дата Moscow: " + moscowTime.toLocalDate());
+    }
+
+    private LocalDateTime getMoscowTime() {
+        return LocalDateTime.now(ZoneId.of("Europe/Moscow"));
+    }
+
+    private LocalDate getMoscowDate() {
+        return LocalDate.now(ZoneId.of("Europe/Moscow"));
     }
 
     private void handleCallbackQuery(org.telegram.telegrambots.meta.api.objects.CallbackQuery callbackQuery, boolean isAdminUser) {
@@ -531,7 +549,7 @@ public class YogaBot extends TelegramWebhookBot {
     }
 
     private void showUserRegistrations(Long chatId, Long userId) {
-        LocalDate tomorrow = LocalDate.now().plusDays(1);
+        LocalDate tomorrow = getMoscowDate().plusDays(1);
 
         try {
             boolean hasMorning = databaseService.isUserRegistered(userId, tomorrow, "morning");
@@ -908,7 +926,7 @@ public class YogaBot extends TelegramWebhookBot {
     }
 
     private void showRegistrations(Long chatId) {
-        LocalDate tomorrow = LocalDate.now().plusDays(1);
+        LocalDate tomorrow = getMoscowDate().plusDays(1);
         Map<String, List<String>> registrations = databaseService.getRegistrationsForDate(tomorrow);
 
         StringBuilder sb = new StringBuilder();
@@ -1022,7 +1040,7 @@ public class YogaBot extends TelegramWebhookBot {
             return;
         }
 
-        LocalDate tomorrow = LocalDate.now().plusDays(1);
+        LocalDate tomorrow = getMoscowDate().plusDays(1);
         String text = "🌅 *Завтрашняя утренняя практика:*\n\n" + morningLesson + "\n\n";
         text += "❗️*Майсор-класс подходит всем, особенно новичкам*❗️\n\n";
         text += "📍 *Место:* Yoga Shala\n\n";
@@ -1043,7 +1061,7 @@ public class YogaBot extends TelegramWebhookBot {
             return;
         }
 
-        LocalDate tomorrow = LocalDate.now().plusDays(1);
+        LocalDate tomorrow = getMoscowDate().plusDays(1);
         // Определяем место проведения для вторника
         String location = (tomorrow.getDayOfWeek() == DayOfWeek.TUESDAY) ? "Аргуновский" : "Yoga Shala";
 
@@ -1126,9 +1144,10 @@ public class YogaBot extends TelegramWebhookBot {
         LocalDate lessonDate = LocalDate.parse(parts[2]);
 
         System.out.println("📅 Дата занятия: " + lessonDate + ", тип: " + lessonType);
+        System.out.println("📅 Сегодня в Москве: " + getMoscowDate());
 
-        // Проверяем, что дата не прошедшая
-        if (lessonDate.isBefore(LocalDate.now())) {
+        // Проверяем, что дата не прошедшая (по московскому времени)
+        if (lessonDate.isBefore(getMoscowDate())) {
             System.out.println("❌ Попытка записи на прошедшее занятие: " + lessonDate);
             answerCallbackQuery(callbackQuery.getId(), "❌ Нельзя записаться на прошедшее занятие!");
             return;
@@ -1161,9 +1180,10 @@ public class YogaBot extends TelegramWebhookBot {
         LocalDate lessonDate = LocalDate.parse(parts[2]);
 
         System.out.println("📅 Дата занятия для отмены: " + lessonDate + ", тип: " + lessonType);
+        System.out.println("📅 Сегодня в Москве: " + getMoscowDate());
 
-        // Проверяем, что дата не прошедшая
-        if (lessonDate.isBefore(LocalDate.now())) {
+        // Проверяем, что дата не прошедшая (по московскому времени)
+        if (lessonDate.isBefore(getMoscowDate())) {
             System.out.println("❌ Попытка отмены прошедшего занятия: " + lessonDate);
             answerCallbackQuery(callbackQuery.getId(), "❌ Нельзя отменить запись на прошедшее занятие!");
             return;
@@ -1223,12 +1243,5 @@ public class YogaBot extends TelegramWebhookBot {
 
         System.out.println("❌ Пользователь " + userId + " НЕ является админом. Настроенные админы: " + Arrays.toString(adminIds));
         return false;
-    }
-
-    public void checkServerTime() {
-        System.out.println("🕒 Текущее время сервера (UTC): " + LocalDateTime.now());
-        System.out.println("🕒 Текущее время Moscow (UTC+3): " + LocalDateTime.now().plusHours(3));
-        System.out.println("🕒 Текущий час (UTC): " + LocalDateTime.now().getHour());
-        System.out.println("🕒 Текущий час (Moscow): " + LocalDateTime.now().plusHours(3).getHour());
     }
 }

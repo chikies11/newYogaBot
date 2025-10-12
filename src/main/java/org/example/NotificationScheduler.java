@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Map;
 
 @Component
@@ -63,12 +64,12 @@ public class NotificationScheduler {
     // Тестовый запуск каждые 30 минут для отладки
     @Scheduled(cron = "0 */30 * * * ?")
     public void debugScheduler() {
+        LocalDateTime moscowTime = LocalDateTime.now(ZoneId.of("Europe/Moscow"));
         System.out.println("🔔 [SCHEDULER DEBUG] Проверка планировщика...");
         System.out.println("🔔 [SCHEDULER DEBUG] UTC: " + LocalDateTime.now());
-        System.out.println("🔔 [SCHEDULER DEBUG] МСК: " + LocalDateTime.now().plusHours(3));
+        System.out.println("🔔 [SCHEDULER DEBUG] МСК: " + moscowTime);
+        System.out.println("🔔 [SCHEDULER DEBUG] Дата МСК: " + moscowTime.toLocalDate());
         System.out.println("🔔 [SCHEDULER DEBUG] Следующие уведомления:");
-        System.out.println("🔔 [SCHEDULER DEBUG] - Утреннее: 13:00 UTC (16:00 МСК)");
-        System.out.println("🔔 [SCHEDULER DEBUG] - Отсутствие: 13:00 UTC (16:00 МСК)");
-        System.out.println("🔔 [SCHEDULER DEBUG] - Вечернее: 13:00 UTC (16:00 МСК)");
+        System.out.println("🔔 [SCHEDULER DEBUG] - Все уведомления: 13:00 UTC (16:00 МСК)");
     }
 }
