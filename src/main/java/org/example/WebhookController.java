@@ -65,7 +65,7 @@ public class WebhookController {
             return ResponseEntity.ok("""
                 🧪 Тестовые уведомления отправлены!
                 
-                Проверьте канал: @yoga_yollayo11
+                Проверьте канал: @Katys_yoga
                 
                 Должны прийти:
                 • 🌅 Утреннее уведомление
@@ -82,7 +82,7 @@ public class WebhookController {
     public ResponseEntity<String> testMorning() {
         try {
             bot.sendManualNotification("morning");
-            return ResponseEntity.ok("🌅 Тестовое утреннее уведомление отправлено! Проверьте канал @yoga_yollayo11");
+            return ResponseEntity.ok("🌅 Тестовое утреннее уведомление отправлено! Проверьте канал @Katys_yoga");
         } catch (Exception e) {
             return ResponseEntity.status(500).body("❌ Ошибка: " + e.getMessage());
         }
@@ -92,7 +92,7 @@ public class WebhookController {
     public ResponseEntity<String> testEvening() {
         try {
             bot.sendManualNotification("evening");
-            return ResponseEntity.ok("🌇 Тестовое вечернее уведомление отправлено! Проверьте канал @yoga_yollayo11");
+            return ResponseEntity.ok("🌇 Тестовое вечернее уведомление отправлено! Проверьте канал @Katys_yoga");
         } catch (Exception e) {
             return ResponseEntity.status(500).body("❌ Ошибка: " + e.getMessage());
         }
@@ -102,7 +102,7 @@ public class WebhookController {
     public ResponseEntity<String> testNoClasses() {
         try {
             bot.sendManualNotification("no_classes");
-            return ResponseEntity.ok("📝 Тестовое уведомление об отсутствии занятий отправлено! Проверьте канал @yoga_yollayo11");
+            return ResponseEntity.ok("📝 Тестовое уведомление об отсутствии занятий отправлено! Проверьте канал @Katys_yoga");
         } catch (Exception e) {
             return ResponseEntity.status(500).body("❌ Ошибка: " + e.getMessage());
         }

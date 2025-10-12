@@ -560,7 +560,7 @@ public class YogaBot extends TelegramWebhookBot {
 
             if (!hasMorning && !hasEvening) {
                 sb.append("У вас нет записей на завтра.\n\n");
-                sb.append("Чтобы записаться, используйте кнопки в уведомлениях канала @yoga_yollayo11");
+                sb.append("Чтобы записаться, используйте кнопки в уведомлениях канала @Katys_yoga");
             } else {
                 if (hasMorning) {
                     sb.append("✅ Записан(а) на утреннюю практику\n");
@@ -993,7 +993,7 @@ public class YogaBot extends TelegramWebhookBot {
     private void sendTestNotificationToAdmin(Long chatId) {
         try {
             sendTestNotification();
-            sendMsg(chatId, "✅ Тестовые уведомления отправлены в канал! Проверьте @yoga_yollayo11");
+            sendMsg(chatId, "✅ Тестовые уведомления отправлены в канал! Проверьте @Katys_yoga");
         } catch (Exception e) {
             sendMsg(chatId, "❌ Ошибка отправки тестовых уведомлений: " + e.getMessage());
         }
