@@ -1043,7 +1043,7 @@ public class YogaBot extends TelegramWebhookBot {
         LocalDate tomorrow = getMoscowDate().plusDays(1);
         String text = "🌅 *Завтрашняя утренняя практика:*\n\n" + morningLesson + "\n\n";
         text += "❗️*Майсор-класс подходит всем, особенно новичкам*❗️\n\n";
-        text += "📍 *Место:* Yoga Shala\n\n";
+        text += "📍 *Место:* Yoga Shala\n\n"; // ВСЕГДА Yoga Shala для утренних занятий
         text += "Записаться⤵️";
 
         InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
@@ -1062,8 +1062,12 @@ public class YogaBot extends TelegramWebhookBot {
         }
 
         LocalDate tomorrow = getMoscowDate().plusDays(1);
-        // Определяем место проведения для вторника
-        String location = (tomorrow.getDayOfWeek() == DayOfWeek.TUESDAY) ? "Аргуновский" : "Yoga Shala";
+
+        // Определяем место проведения: ТОЛЬКО для вечернего занятия во вторник - "Аргуновский"
+        String location = "Yoga Shala"; // по умолчанию
+        if (tomorrow.getDayOfWeek() == DayOfWeek.TUESDAY) {
+            location = "Аргуновский";
+        }
 
         String text = "🌇 *Завтрашняя вечерняя практика:*\n\n" + eveningLesson + "\n\n";
         text += "❗️*Майсор-класс подходит всем, особенно новичкам*❗️\n\n";
