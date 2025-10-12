@@ -1022,6 +1022,7 @@ public class YogaBot extends TelegramWebhookBot {
             return;
         }
 
+        LocalDate tomorrow = LocalDate.now().plusDays(1);
         String text = "🌅 *Завтрашняя утренняя практика:*\n\n" + morningLesson + "\n\n";
         text += "❗️*Майсор-класс подходит всем, особенно новичкам*❗️\n\n";
         text += "📍 *Место:* Yoga Shala\n\n";
@@ -1029,8 +1030,8 @@ public class YogaBot extends TelegramWebhookBot {
 
         InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
         List<InlineKeyboardButton> row = new ArrayList<>();
-        row.add(createInlineButton("✅ Записаться", "signup_morning"));
-        row.add(createInlineButton("❌ Отменить запись", "cancel_morning"));
+        row.add(createInlineButton("✅ Записаться", "signup_morning_" + tomorrow));
+        row.add(createInlineButton("❌ Отменить запись", "cancel_morning_" + tomorrow));
         markup.setKeyboard(List.of(row));
 
         sendToChannel(text, markup);
@@ -1042,8 +1043,8 @@ public class YogaBot extends TelegramWebhookBot {
             return;
         }
 
-        // Определяем место проведения для вторника
         LocalDate tomorrow = LocalDate.now().plusDays(1);
+        // Определяем место проведения для вторника
         String location = (tomorrow.getDayOfWeek() == DayOfWeek.TUESDAY) ? "Аргуновский" : "Yoga Shala";
 
         String text = "🌇 *Завтрашняя вечерняя практика:*\n\n" + eveningLesson + "\n\n";
@@ -1053,8 +1054,8 @@ public class YogaBot extends TelegramWebhookBot {
 
         InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
         List<InlineKeyboardButton> row = new ArrayList<>();
-        row.add(createInlineButton("✅ Записаться", "signup_evening"));
-        row.add(createInlineButton("❌ Отменить запись", "cancel_evening"));
+        row.add(createInlineButton("✅ Записаться", "signup_evening_" + tomorrow));
+        row.add(createInlineButton("❌ Отменить запись", "cancel_evening_" + tomorrow));
         markup.setKeyboard(List.of(row));
 
         sendToChannel(text, markup);
@@ -1110,10 +1111,30 @@ public class YogaBot extends TelegramWebhookBot {
         String firstName = callbackQuery.getFrom().getFirstName();
 
         String displayName = username != null ? "@" + username : firstName;
-        String lessonType = data.substring(7);
-        LocalDate tomorrow = LocalDate.now().plusDays(1);
 
-        boolean success = databaseService.registerUser(userId, username, displayName, tomorrow, lessonType);
+        System.out.println("🔘 Обработка записи: " + data);
+
+        // Парсим данные: "signup_morning_2025-10-13"
+        String[] parts = data.split("_");
+        if (parts.length < 3) {
+            System.out.println("❌ Неверный формат callback данных: " + data);
+            answerCallbackQuery(callbackQuery.getId(), "❌ Ошибка формата данных");
+            return;
+        }
+
+        String lessonType = parts[1];
+        LocalDate lessonDate = LocalDate.parse(parts[2]);
+
+        System.out.println("📅 Дата занятия: " + lessonDate + ", тип: " + lessonType);
+
+        // Проверяем, что дата не прошедшая
+        if (lessonDate.isBefore(LocalDate.now())) {
+            System.out.println("❌ Попытка записи на прошедшее занятие: " + lessonDate);
+            answerCallbackQuery(callbackQuery.getId(), "❌ Нельзя записаться на прошедшее занятие!");
+            return;
+        }
+
+        boolean success = databaseService.registerUser(userId, username, displayName, lessonDate, lessonType);
 
         String answer = success ?
                 "✅ Вы записаны на " + (lessonType.equals("morning") ? "утреннюю" : "вечернюю") + " практику!" :
@@ -1125,10 +1146,30 @@ public class YogaBot extends TelegramWebhookBot {
     private void handleUserCancel(org.telegram.telegrambots.meta.api.objects.CallbackQuery callbackQuery) {
         String data = callbackQuery.getData();
         Long userId = callbackQuery.getFrom().getId();
-        String lessonType = data.substring(7);
-        LocalDate tomorrow = LocalDate.now().plusDays(1);
 
-        boolean success = databaseService.cancelRegistration(userId, tomorrow, lessonType);
+        System.out.println("🔘 Обработка отмены: " + data);
+
+        // Парсим данные: "cancel_evening_2025-10-13"
+        String[] parts = data.split("_");
+        if (parts.length < 3) {
+            System.out.println("❌ Неверный формат callback данных: " + data);
+            answerCallbackQuery(callbackQuery.getId(), "❌ Ошибка формата данных");
+            return;
+        }
+
+        String lessonType = parts[1];
+        LocalDate lessonDate = LocalDate.parse(parts[2]);
+
+        System.out.println("📅 Дата занятия для отмены: " + lessonDate + ", тип: " + lessonType);
+
+        // Проверяем, что дата не прошедшая
+        if (lessonDate.isBefore(LocalDate.now())) {
+            System.out.println("❌ Попытка отмены прошедшего занятия: " + lessonDate);
+            answerCallbackQuery(callbackQuery.getId(), "❌ Нельзя отменить запись на прошедшее занятие!");
+            return;
+        }
+
+        boolean success = databaseService.cancelRegistration(userId, lessonDate, lessonType);
 
         String answer = success ?
                 "❌ Запись на " + (lessonType.equals("morning") ? "утреннюю" : "вечернюю") + " практику отменена!" :
