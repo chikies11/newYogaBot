@@ -3,10 +3,9 @@ package org.example;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.util.Map;
+import java.time.*;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
 
 @Component
 public class NotificationScheduler {
@@ -22,9 +21,12 @@ public class NotificationScheduler {
     public void sendAllNotifications() {
         LocalDateTime moscowTime = LocalDateTime.now(ZoneId.of("Europe/Moscow"));
         System.out.println("⏰ [SCHEDULER] Отправка всех уведомлений в 16:00 МСК (13:00 UTC)...");
-        System.out.println("⏰ [SCHEDULER] Текущее время МСК: " + moscowTime);
+        System.out.println("⏰ [SCHEDULER] Текущее время МСК: " + moscowTime.format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")));
 
+        // Используем московскую дату для определения "завтра"
         LocalDate tomorrow = LocalDate.now(ZoneId.of("Europe/Moscow")).plusDays(1);
+        System.out.println("⏰ [SCHEDULER] Завтрашняя дата: " + tomorrow.format(DateTimeFormatter.ofPattern("dd.MM.yyyy")));
+
         Map<String, String> tomorrowSchedule = yogaBot.getTomorrowSchedule(tomorrow);
         String morningLesson = tomorrowSchedule.get("morning");
         String eveningLesson = tomorrowSchedule.get("evening");
@@ -66,10 +68,12 @@ public class NotificationScheduler {
     @Scheduled(cron = "0 */30 * * * ?")
     public void debugScheduler() {
         LocalDateTime moscowTime = LocalDateTime.now(ZoneId.of("Europe/Moscow"));
+        LocalDateTime utcTime = LocalDateTime.now(ZoneOffset.UTC);
+
         System.out.println("🔔 [SCHEDULER DEBUG] Проверка планировщика...");
-        System.out.println("🔔 [SCHEDULER DEBUG] UTC: " + LocalDateTime.now());
-        System.out.println("🔔 [SCHEDULER DEBUG] МСК: " + moscowTime);
-        System.out.println("🔔 [SCHEDULER DEBUG] Дата МСК: " + moscowTime.toLocalDate());
+        System.out.println("🔔 [SCHEDULER DEBUG] UTC: " + utcTime.format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")));
+        System.out.println("🔔 [SCHEDULER DEBUG] МСК: " + moscowTime.format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")));
+        System.out.println("🔔 [SCHEDULER DEBUG] Дата МСК: " + moscowTime.toLocalDate().format(DateTimeFormatter.ofPattern("dd.MM.yyyy")));
         System.out.println("🔔 [SCHEDULER DEBUG] Следующие уведомления: 13:00 UTC (16:00 МСК)");
     }
 }
