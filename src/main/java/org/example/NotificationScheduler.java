@@ -17,13 +17,14 @@ public class NotificationScheduler {
         this.yogaBot = yogaBot;
     }
 
-    // Утреннее уведомление в 16:00 МСК = 13:00 UTC
-    // Все уведомления в 16:00 МСК = 13:00 UTC с задержками
-    @Scheduled(cron = "0 0 16 * * ?")
+    // Уведомления в 16:00 МСК = 13:00 UTC
+    @Scheduled(cron = "0 0 13 * * ?")
     public void sendAllNotifications() {
+        LocalDateTime moscowTime = LocalDateTime.now(ZoneId.of("Europe/Moscow"));
         System.out.println("⏰ [SCHEDULER] Отправка всех уведомлений в 16:00 МСК (13:00 UTC)...");
+        System.out.println("⏰ [SCHEDULER] Текущее время МСК: " + moscowTime);
 
-        LocalDate tomorrow = LocalDate.now().plusDays(1);
+        LocalDate tomorrow = LocalDate.now(ZoneId.of("Europe/Moscow")).plusDays(1);
         Map<String, String> tomorrowSchedule = yogaBot.getTomorrowSchedule(tomorrow);
         String morningLesson = tomorrowSchedule.get("morning");
         String eveningLesson = tomorrowSchedule.get("evening");
@@ -52,13 +53,13 @@ public class NotificationScheduler {
             yogaBot.sendEveningNotification(eveningLesson);
         }
 
-        // Если нет занятий вообще - отправляем уведомление об отсутствии через 5 минут
         // Если нет занятий вообще - отправляем уведомление об отсутствии
         if (!hasMorning && !hasEvening) {
             System.out.println("📝 Отправка уведомления об отсутствии занятий...");
             yogaBot.sendNoClassesNotification(morningLesson, eveningLesson);
-            // Убрать sleep - незачем ждать если нет других уведомлений
         }
+
+        System.out.println("✅ [SCHEDULER] Все уведомления отправлены!");
     }
 
     // Тестовый запуск каждые 30 минут для отладки
@@ -69,7 +70,6 @@ public class NotificationScheduler {
         System.out.println("🔔 [SCHEDULER DEBUG] UTC: " + LocalDateTime.now());
         System.out.println("🔔 [SCHEDULER DEBUG] МСК: " + moscowTime);
         System.out.println("🔔 [SCHEDULER DEBUG] Дата МСК: " + moscowTime.toLocalDate());
-        System.out.println("🔔 [SCHEDULER DEBUG] Следующие уведомления:");
-        System.out.println("🔔 [SCHEDULER DEBUG] - Все уведомления: 13:00 UTC (16:00 МСК)");
+        System.out.println("🔔 [SCHEDULER DEBUG] Следующие уведомления: 13:00 UTC (16:00 МСК)");
     }
 }
