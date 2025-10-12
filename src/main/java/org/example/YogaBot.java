@@ -97,31 +97,31 @@ public class YogaBot extends TelegramWebhookBot {
         // Понедельник
         Map<String, String> monday = new HashMap<>();
         monday.put("morning", "8:00 - 11:30 - Майсор класс");
-        monday.put("evening", "17:00 - 20:00 - Майсор класс");
+        monday.put("evening", "17:00 - 20:30 - Майсор класс");
         fixedSchedule.put(DayOfWeek.MONDAY, monday);
 
         // Вторник
         Map<String, String> tuesday = new HashMap<>();
         tuesday.put("morning", "8:00 - 11:30 - Майсор класс");
-        tuesday.put("evening", "Отдых");
+        tuesday.put("evening", "18:30 - 20:00 - Майсор класс");
         fixedSchedule.put(DayOfWeek.TUESDAY, tuesday);
 
         // Среда
         Map<String, String> wednesday = new HashMap<>();
         wednesday.put("morning", "8:00 - 11:30 - Майсор класс");
-        wednesday.put("evening", "18:30 - 20:00 - Майсор класс");
+        wednesday.put("evening", "17:00 - 20:30 - Майсор класс");
         fixedSchedule.put(DayOfWeek.WEDNESDAY, wednesday);
 
         // Четверг
         Map<String, String> thursday = new HashMap<>();
         thursday.put("morning", "8:00 - 11:30 - Майсор класс");
-        thursday.put("evening", "17:00 - 20:00 - Майсор класс");
+        thursday.put("evening", "17:00 - 20:30 - Майсор класс");
         fixedSchedule.put(DayOfWeek.THURSDAY, thursday);
 
         // Пятница
         Map<String, String> friday = new HashMap<>();
         friday.put("morning", "8:00 - 11:30 - Майсор класс");
-        friday.put("evening", "17:00 - 20:00 - Майсор класс");
+        friday.put("evening", "17:00 - 20:30 - Майсор класс");
         fixedSchedule.put(DayOfWeek.FRIDAY, friday);
 
         // Суббота
@@ -132,7 +132,7 @@ public class YogaBot extends TelegramWebhookBot {
 
         // Воскресенье
         Map<String, String> sunday = new HashMap<>();
-        sunday.put("morning", "10:00 - 11:30 LED-КЛАСС\n11:30 - 12:00 Конференция (По необходимости)");
+        sunday.put("morning", "10:00 - 11:30 LED-КЛАСС");
         sunday.put("evening", "Отдых");
         fixedSchedule.put(DayOfWeek.SUNDAY, sunday);
     }
@@ -201,7 +201,6 @@ public class YogaBot extends TelegramWebhookBot {
                     showScheduleForUsers(chatId);
                 }
             }
-            case "📋 Мои записи" -> showUserRegistrations(chatId, userId);
             case "🕒 Проверить время" -> checkAndSendTime(chatId);
             default -> {
                 if (isAdminUser) {
@@ -310,7 +309,7 @@ public class YogaBot extends TelegramWebhookBot {
         switch (text) {
             case "📅 Расписание" -> {
                 System.out.println("📅 Админ запросил меню расписания - ВЫЗЫВАЕМ showScheduleMenu");
-                showScheduleMenu(chatId);  // ЭТА СТРОКА ДОЛЖНА ВЫЗЫВАТЬСЯ!
+                showScheduleMenu(chatId);
             }
             case "🔔 Уведомления" -> {
                 System.out.println("🔔 Админ переключает уведомления");
@@ -319,14 +318,6 @@ public class YogaBot extends TelegramWebhookBot {
             case "📋 Все записи" -> {
                 System.out.println("📋 Админ запросил все записи");
                 showRegistrations(chatId);
-            }
-            case "📊 Логи действий" -> {
-                System.out.println("📊 Админ запросил логи действий");
-                showAdminLogs(chatId);
-            }
-            case "🧪 Тест уведомлений" -> {
-                System.out.println("🧪 Админ запускает тест уведомлений");
-                sendTestNotificationToAdmin(chatId);
             }
             case "🕒 Проверить время" -> {
                 System.out.println("🕒 Админ проверяет время");
@@ -500,7 +491,6 @@ public class YogaBot extends TelegramWebhookBot {
         // Кнопки для всех пользователей
         KeyboardRow row1 = new KeyboardRow();
         row1.add("📅 Расписание");
-        row1.add("📋 Мои записи");
 
         KeyboardRow row2 = new KeyboardRow();
         row2.add("🕒 Проверить время");
@@ -516,12 +506,7 @@ public class YogaBot extends TelegramWebhookBot {
             adminRow1.add("🔔 Уведомления");
             adminRow1.add("📋 Все записи");
 
-            KeyboardRow adminRow2 = new KeyboardRow();
-            adminRow2.add("📊 Логи действий");
-            adminRow2.add("🧪 Тест уведомлений");
-
             keyboard.add(adminRow1);
-            keyboard.add(adminRow2);
         } else {
             System.out.println("👤 Обычный пользователь - админские кнопки не показываются");
         }
@@ -1038,8 +1023,9 @@ public class YogaBot extends TelegramWebhookBot {
         }
 
         String text = "🌅 *Завтрашняя утренняя практика:*\n\n" + morningLesson + "\n\n";
-        text += "📍 *Место:* Студия йоги\n\n";
-        text += "Записывайтесь на занятие!";
+        text += "❗️*Майсор-класс подходит всем, особенно новичкам*❗️\n\n";
+        text += "📍 *Место:* Yoga Shala\n\n";
+        text += "Записаться⤵️";
 
         InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
         List<InlineKeyboardButton> row = new ArrayList<>();
@@ -1056,9 +1042,14 @@ public class YogaBot extends TelegramWebhookBot {
             return;
         }
 
+        // Определяем место проведения для вторника
+        LocalDate tomorrow = LocalDate.now().plusDays(1);
+        String location = (tomorrow.getDayOfWeek() == DayOfWeek.TUESDAY) ? "Аргуновский" : "Yoga Shala";
+
         String text = "🌇 *Завтрашняя вечерняя практика:*\n\n" + eveningLesson + "\n\n";
-        text += "📍 *Место:* Студия йоги\n\n";
-        text += "Записывайтесь на занятие!";
+        text += "❗️*Майсор-класс подходит всем, особенно новичкам*❗️\n\n";
+        text += "📍 *Место:* " + location + "\n\n";
+        text += "Записаться⤵️";
 
         InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
         List<InlineKeyboardButton> row = new ArrayList<>();
@@ -1075,7 +1066,7 @@ public class YogaBot extends TelegramWebhookBot {
 
         // Отправляем уведомление если ЕСТЬ отсутствующие занятия
         if (!hasMorning && !hasEvening) {
-            String text = "Не могу стоять, пока другие работают... Пойду полежу...)\n\nУра, завтра занятий нет! Отдыхаем и восстанавливаемся! 💫";
+            String text = "Ура, завтра занятий нет! Отдыхаем и восстанавливаемся! 💫";
             sendToChannel(text);
         } else if (!hasMorning) {
             sendToChannel("🌅 На завтра утренних занятий нет");

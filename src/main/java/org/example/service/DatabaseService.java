@@ -282,31 +282,31 @@ public class DatabaseService {
         // Понедельник
         Map<String, String> monday = new HashMap<>();
         monday.put("morning", "8:00 - 11:30 - Майсор класс");
-        monday.put("evening", "17:00 - 20:00 - Майсор класс");
+        monday.put("evening", "17:00 - 20:30 - Майсор класс");
         schedule.put(DayOfWeek.MONDAY, monday);
 
         // Вторник
         Map<String, String> tuesday = new HashMap<>();
         tuesday.put("morning", "8:00 - 11:30 - Майсор класс");
-        tuesday.put("evening", "Отдых");
+        tuesday.put("evening", "18:30 - 20:00 - Майсор класс");
         schedule.put(DayOfWeek.TUESDAY, tuesday);
 
         // Среда
         Map<String, String> wednesday = new HashMap<>();
         wednesday.put("morning", "8:00 - 11:30 - Майсор класс");
-        wednesday.put("evening", "18:30 - 20:00 - Майсор класс");
+        wednesday.put("evening", "17:00 - 20:30 - Майсор класс");
         schedule.put(DayOfWeek.WEDNESDAY, wednesday);
 
         // Четверг
         Map<String, String> thursday = new HashMap<>();
         thursday.put("morning", "8:00 - 11:30 - Майсор класс");
-        thursday.put("evening", "17:00 - 20:00 - Майсор класс");
+        thursday.put("evening", "17:00 - 20:30 - Майсор класс");
         schedule.put(DayOfWeek.THURSDAY, thursday);
 
         // Пятница
         Map<String, String> friday = new HashMap<>();
         friday.put("morning", "8:00 - 11:30 - Майсор класс");
-        friday.put("evening", "17:00 - 20:00 - Майсор класс");
+        friday.put("evening", "17:00 - 20:30 - Майсор класс");
         schedule.put(DayOfWeek.FRIDAY, friday);
 
         // Суббота
@@ -317,7 +317,7 @@ public class DatabaseService {
 
         // Воскресенье
         Map<String, String> sunday = new HashMap<>();
-        sunday.put("morning", "10:00 - 11:30 LED-КЛАСС\n11:30 - 12:00 Конференция (По необходимости)");
+        sunday.put("morning", "10:00 - 11:30 LED-КЛАСС");
         sunday.put("evening", "Отдых");
         schedule.put(DayOfWeek.SUNDAY, sunday);
 
