@@ -333,6 +333,16 @@ public class YogaBot extends TelegramWebhookBot {
                 System.out.println("🔔 Админ переключает уведомления");
                 toggleNotifications(chatId);
             }
+            case "🔔 Отбивка на сегодня" -> {
+                System.out.println("🔔 Админ отправляет отбивку на сегодня");
+                sendTodayNotification();
+                sendMsg(chatId, "✅ Отбивка на сегодня отправлена в канал!");
+            }
+            case "🔔 Отбивка на завтра" -> {
+                System.out.println("🔔 Админ отправляет отбивку на завтра");
+                sendTestNotification(); // Этот метод уже отправляет на завтра
+                sendMsg(chatId, "✅ Отбивка на завтра отправлена в канал!");
+            }
             case "📋 Все записи" -> {
                 System.out.println("📋 Админ запросил все записи");
                 showRegistrations(chatId);
@@ -524,9 +534,17 @@ public class YogaBot extends TelegramWebhookBot {
             adminRow1.add("🔔 Уведомления");
             adminRow1.add("📋 Все записи");
 
+            KeyboardRow adminRow2 = new KeyboardRow();
+            adminRow2.add("📋 Записи на сегодня");
+            adminRow2.add("📋 Записи на завтра");
+
+            KeyboardRow adminRow3 = new KeyboardRow();
+            adminRow3.add("🔔 Отбивка на сегодня");
+            adminRow3.add("🔔 Отбивка на завтра");
+
             keyboard.add(adminRow1);
-        } else {
-            System.out.println("👤 Обычный пользователь - админские кнопки не показываются");
+            keyboard.add(adminRow2);
+            keyboard.add(adminRow3);
         }
 
         keyboardMarkup.setKeyboard(keyboard);
@@ -961,6 +979,89 @@ public class YogaBot extends TelegramWebhookBot {
         sb.append("• Всего: ").append(registrations.get("morning").size() + registrations.get("evening").size()).append(" чел.");
 
         sendMsg(chatId, sb.toString());
+    }
+
+    public void sendTodayMorningNotification() {
+        LocalDate today = getMoscowDate();
+        Map<String, String> todaySchedule = getTomorrowSchedule(today); // Используем сегодняшнюю дату
+        String morningLesson = todaySchedule.get("morning");
+
+        if (morningLesson == null || morningLesson.equals("ОТДЫХ") || morningLesson.equals("Отдых")) {
+            sendToChannel("🌅 На сегодня утренних занятий нет");
+            return;
+        }
+
+        String text = "🌅 *Сегодняшняя утренняя практика:*\n\n" + morningLesson + "\n\n";
+        text += "❗️*Майсор-класс подходит всем, особенно новичкам*❗️\n\n";
+        text += "📍 *Место:* Yoga Shala\n\n";
+        text += "Записаться⤵️";
+
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+        List<InlineKeyboardButton> row = new ArrayList<>();
+        row.add(createInlineButton("✅ Записаться", "signup_morning_" + today));
+        row.add(createInlineButton("❌ Отменить запись", "cancel_morning_" + today));
+        markup.setKeyboard(List.of(row));
+
+        sendToChannel(text, markup);
+    }
+
+    public void sendTodayEveningNotification() {
+        LocalDate today = getMoscowDate();
+        Map<String, String> todaySchedule = getTomorrowSchedule(today); // Используем сегодняшнюю дату
+        String eveningLesson = todaySchedule.get("evening");
+
+        if (eveningLesson == null || eveningLesson.equals("ОТДЫХ") || eveningLesson.equals("Отдых")) {
+            sendToChannel("🌇 На сегодня вечерних занятий нет");
+            return;
+        }
+
+        // Определяем место проведения для вторника
+        String location = "Yoga Shala";
+        if (today.getDayOfWeek() == DayOfWeek.TUESDAY) {
+            location = "Аргуновский";
+        }
+
+        String text = "🌇 *Сегодняшняя вечерняя практика:*\n\n" + eveningLesson + "\n\n";
+        text += "❗️*Майсор-класс подходит всем, особенно новичкам*❗️\n\n";
+        text += "📍 *Место:* " + location + "\n\n";
+        text += "Записаться⤵️";
+
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+        List<InlineKeyboardButton> row = new ArrayList<>();
+        row.add(createInlineButton("✅ Записаться", "signup_evening_" + today));
+        row.add(createInlineButton("❌ Отменить запись", "cancel_evening_" + today));
+        markup.setKeyboard(List.of(row));
+
+        sendToChannel(text, markup);
+    }
+
+    public void sendTodayNotification() {
+        System.out.println("🔔 Отправка уведомлений на сегодня...");
+
+        LocalDate today = getMoscowDate();
+        Map<String, String> todaySchedule = getTomorrowSchedule(today);
+        String morningLesson = todaySchedule.get("morning");
+        String eveningLesson = todaySchedule.get("evening");
+
+        boolean hasMorning = morningLesson != null && !morningLesson.equals("ОТДЫХ") && !morningLesson.equals("Отдых");
+        boolean hasEvening = eveningLesson != null && !eveningLesson.equals("ОТДЫХ") && !eveningLesson.equals("Отдых");
+
+        if (hasMorning) {
+            sendTodayMorningNotification();
+            try {
+                Thread.sleep(2000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+
+        if (hasEvening) {
+            sendTodayEveningNotification();
+        }
+
+        if (!hasMorning && !hasEvening) {
+            sendToChannel("📝 На сегодня занятий нет! Отдыхаем и восстанавливаемся! 💫");
+        }
     }
 
     public void sendTestNotification() {

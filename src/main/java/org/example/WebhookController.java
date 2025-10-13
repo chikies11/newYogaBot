@@ -78,6 +78,42 @@ public class WebhookController {
         }
     }
 
+    @GetMapping("/send-today")
+    public ResponseEntity<String> sendTodayNotification() {
+        try {
+            bot.sendTodayNotification();
+            return ResponseEntity.ok("""
+            🔔 Уведомления на сегодня отправлены в канал!
+            
+            Проверьте канал: @yoga_yollayo11
+            
+            Должны прийти уведомления на СЕГОДНЯШНИЕ занятия с кнопками записи.
+            """);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("❌ Ошибка: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/send-today-morning")
+    public ResponseEntity<String> sendTodayMorning() {
+        try {
+            bot.sendTodayMorningNotification();
+            return ResponseEntity.ok("🌅 Уведомление на сегодняшнее утреннее занятие отправлено!");
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("❌ Ошибка: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/send-today-evening")
+    public ResponseEntity<String> sendTodayEvening() {
+        try {
+            bot.sendTodayEveningNotification();
+            return ResponseEntity.ok("🌇 Уведомление на сегодняшнее вечернее занятие отправлено!");
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("❌ Ошибка: " + e.getMessage());
+        }
+    }
+
     @GetMapping("/test-morning")
     public ResponseEntity<String> testMorning() {
         try {
