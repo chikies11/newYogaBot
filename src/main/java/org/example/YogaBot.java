@@ -321,6 +321,49 @@ public class YogaBot extends TelegramWebhookBot {
         }
     }
 
+    private void showRegistrationsForDate(Long chatId, LocalDate date) {
+        try {
+            Map<String, List<String>> registrations = databaseService.getRegistrationsForDate(date);
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("📋 *Записи на ").append(date.format(DateTimeFormatter.ofPattern("dd.MM"))).append("*\n\n");
+
+            sb.append("🌅 *Утренняя практика:*\n");
+            if (registrations.get("morning").isEmpty()) {
+                sb.append("Записей пока нет\n\n");
+            } else {
+                int counter = 1;
+                for (String name : registrations.get("morning")) {
+                    sb.append(counter).append(". ").append(name).append("\n");
+                    counter++;
+                }
+                sb.append("\n");
+            }
+
+            sb.append("🌇 *Вечерняя практика:*\n");
+            if (registrations.get("evening").isEmpty()) {
+                sb.append("Записей пока нет");
+            } else {
+                int counter = 1;
+                for (String name : registrations.get("evening")) {
+                    sb.append(counter).append(". ").append(name).append("\n");
+                    counter++;
+                }
+            }
+
+            sb.append("\n\n📊 *Статистика:*\n");
+            sb.append("• Утренние: ").append(registrations.get("morning").size()).append(" чел.\n");
+            sb.append("• Вечерние: ").append(registrations.get("evening").size()).append(" чел.\n");
+            sb.append("• Всего: ").append(registrations.get("morning").size() + registrations.get("evening").size()).append(" чел.");
+
+            sendMsg(chatId, sb.toString());
+
+        } catch (Exception e) {
+            System.err.println("❌ Ошибка получения записей: " + e.getMessage());
+            sendMsg(chatId, "❌ Ошибка при загрузке записей");
+        }
+    }
+
     private void handleAdminMessage(Long chatId, String text, Long userId) {
         System.out.println("👨‍💼 Обработка админской команды: " + text);
 
@@ -333,6 +376,18 @@ public class YogaBot extends TelegramWebhookBot {
                 System.out.println("🔔 Админ переключает уведомления");
                 toggleNotifications(chatId);
             }
+            case "📋 Все записи" -> {
+                System.out.println("📋 Админ запросил все записи");
+                showRegistrations(chatId);
+            }
+            case "📋 Записи на сегодня" -> {
+                System.out.println("📋 Админ запросил записи на сегодня");
+                showTodayRegistrations(chatId); // ✅ ДОБАВЛЕНО ВЫЗОВ МЕТОДА
+            }
+            case "📋 Записи на завтра" -> {
+                System.out.println("📋 Админ запросил записи на завтра");
+                showRegistrationsForDate(chatId, getMoscowDate().plusDays(1));
+            }
             case "🔔 Отбивка на сегодня" -> {
                 System.out.println("🔔 Админ отправляет отбивку на сегодня");
                 sendTodayNotification();
@@ -340,12 +395,8 @@ public class YogaBot extends TelegramWebhookBot {
             }
             case "🔔 Отбивка на завтра" -> {
                 System.out.println("🔔 Админ отправляет отбивку на завтра");
-                sendTestNotification(); // Этот метод уже отправляет на завтра
+                sendTestNotification();
                 sendMsg(chatId, "✅ Отбивка на завтра отправлена в канал!");
-            }
-            case "📋 Все записи" -> {
-                System.out.println("📋 Админ запросил все записи");
-                showRegistrations(chatId);
             }
             case "🕒 Проверить время" -> {
                 System.out.println("🕒 Админ проверяет время");
