@@ -981,9 +981,65 @@ public class YogaBot extends TelegramWebhookBot {
         sendMsg(chatId, sb.toString());
     }
 
+    public Map<String, String> getScheduleForDate(LocalDate date) {
+        Map<String, String> schedule = new HashMap<>();
+        DayOfWeek dayOfWeek = date.getDayOfWeek();
+
+        if (fixedSchedule.containsKey(dayOfWeek)) {
+            schedule.put("morning", fixedSchedule.get(dayOfWeek).get("morning"));
+            schedule.put("evening", fixedSchedule.get(dayOfWeek).get("evening"));
+        } else {
+            schedule.put("morning", "Не указано");
+            schedule.put("evening", "Не указано");
+        }
+
+        return schedule;
+    }
+
+    private void showTodayRegistrations(Long chatId) {
+        LocalDate today = getMoscowDate();
+        System.out.println("🔍 Запрос записей на сегодня: " + today);
+
+        Map<String, List<String>> registrations = databaseService.getRegistrationsForDate(today);
+        System.out.println("🔍 Найдено записей: утро=" + registrations.get("morning").size() + ", вечер=" + registrations.get("evening").size());
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("📋 *Записи на сегодня (").append(today.format(DateTimeFormatter.ofPattern("dd.MM"))).append(")*\n\n");
+
+        sb.append("🌅 *Утренняя практика:*\n");
+        if (registrations.get("morning").isEmpty()) {
+            sb.append("Записей пока нет\n\n");
+        } else {
+            int counter = 1;
+            for (String name : registrations.get("morning")) {
+                sb.append(counter).append(". ").append(name).append("\n");
+                counter++;
+            }
+            sb.append("\n");
+        }
+
+        sb.append("🌇 *Вечерняя практика:*\n");
+        if (registrations.get("evening").isEmpty()) {
+            sb.append("Записей пока нет");
+        } else {
+            int counter = 1;
+            for (String name : registrations.get("evening")) {
+                sb.append(counter).append(". ").append(name).append("\n");
+                counter++;
+            }
+        }
+
+        sb.append("\n\n📊 *Статистика:*\n");
+        sb.append("• Утренние: ").append(registrations.get("morning").size()).append(" чел.\n");
+        sb.append("• Вечерние: ").append(registrations.get("evening").size()).append(" чел.\n");
+        sb.append("• Всего: ").append(registrations.get("morning").size() + registrations.get("evening").size()).append(" чел.");
+
+        sendMsg(chatId, sb.toString());
+    }
+
     public void sendTodayMorningNotification() {
         LocalDate today = getMoscowDate();
-        Map<String, String> todaySchedule = getTomorrowSchedule(today); // Используем сегодняшнюю дату
+        Map<String, String> todaySchedule = getScheduleForDate(today); // ИСПРАВЛЕНО
         String morningLesson = todaySchedule.get("morning");
 
         if (morningLesson == null || morningLesson.equals("ОТДЫХ") || morningLesson.equals("Отдых")) {
@@ -1007,7 +1063,7 @@ public class YogaBot extends TelegramWebhookBot {
 
     public void sendTodayEveningNotification() {
         LocalDate today = getMoscowDate();
-        Map<String, String> todaySchedule = getTomorrowSchedule(today); // Используем сегодняшнюю дату
+        Map<String, String> todaySchedule = getScheduleForDate(today); // ИСПРАВЛЕНО
         String eveningLesson = todaySchedule.get("evening");
 
         if (eveningLesson == null || eveningLesson.equals("ОТДЫХ") || eveningLesson.equals("Отдых")) {
@@ -1039,12 +1095,14 @@ public class YogaBot extends TelegramWebhookBot {
         System.out.println("🔔 Отправка уведомлений на сегодня...");
 
         LocalDate today = getMoscowDate();
-        Map<String, String> todaySchedule = getTomorrowSchedule(today);
+        Map<String, String> todaySchedule = getScheduleForDate(today); // ИСПРАВЛЕНО
         String morningLesson = todaySchedule.get("morning");
         String eveningLesson = todaySchedule.get("evening");
 
         boolean hasMorning = morningLesson != null && !morningLesson.equals("ОТДЫХ") && !morningLesson.equals("Отдых");
         boolean hasEvening = eveningLesson != null && !eveningLesson.equals("ОТДЫХ") && !eveningLesson.equals("Отдых");
+
+        System.out.println("📊 На сегодня: утро=" + hasMorning + ", вечер=" + hasEvening);
 
         if (hasMorning) {
             sendTodayMorningNotification();
