@@ -68,7 +68,7 @@ public class MessageCleanupService {
     }
 
     // Удаление вчерашней утренней отбивки в 8:00 МСК
-    @Scheduled(cron = "0 0 5 * * ?", zone = "Europe/Moscow")
+    @Scheduled(cron = "0 0 8 * * ?")
     public void deleteYesterdayMorningMessages() {
         if (channelId == null || channelId.isEmpty()) {
             log.warn("⚠️ Channel ID не настроен, пропускаем удаление утренних сообщений");
@@ -81,7 +81,7 @@ public class MessageCleanupService {
     }
 
     // Удаление вчерашней вечерней отбивки в 16:00 МСК
-    @Scheduled(cron = "0 0 13 * * ?", zone = "Europe/Moscow")
+    @Scheduled(cron = "0 0 16 * * ?")
     public void deleteYesterdayEveningMessages() {
         if (channelId == null || channelId.isEmpty()) {
             log.warn("⚠️ Channel ID не настроен, пропускаем удаление вечерних сообщений");
@@ -161,7 +161,7 @@ public class MessageCleanupService {
     }
 
     // Удаление вчерашних уведомлений об отсутствии занятий в 17:00 МСК
-    @Scheduled(cron = "0 0 14 * * ?", zone = "Europe/Moscow") // 17:00 МСК = 14:00 UTC
+    @Scheduled(cron = "0 1 16 * * ?", zone = "Europe/Moscow") // 17:00 МСК = 14:00 UTC
     public void deleteYesterdayNoClassesMessages() {
         if (channelId == null || channelId.isEmpty()) {
             log.warn("⚠️ Channel ID не настроен, пропускаем удаление уведомлений об отсутствии занятий");
