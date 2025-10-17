@@ -96,9 +96,9 @@ public class MessageCleanupService {
     private void deleteMessagesForDateAndType(LocalDate date, String lessonType) {
         try {
             List<Map<String, Object>> messages = jdbcTemplate.queryForList("""
-                SELECT message_id FROM channel_messages 
-                WHERE lesson_date = ? AND lesson_type = ?
-            """, date, lessonType);
+            SELECT message_id FROM channel_messages 
+            WHERE lesson_date = ? AND lesson_type = ?
+        """, date, lessonType);
 
             if (messages.isEmpty()) {
                 log.info("ℹ️ Не найдено сообщений для удаления: {} {}", date, lessonType);
@@ -158,5 +158,18 @@ public class MessageCleanupService {
         } catch (Exception e) {
             log.error("❌ Ошибка очистки старых записей", e);
         }
+    }
+
+    // Удаление вчерашних уведомлений об отсутствии занятий в 17:00 МСК
+    @Scheduled(cron = "0 0 14 * * ?", zone = "Europe/Moscow") // 17:00 МСК = 14:00 UTC
+    public void deleteYesterdayNoClassesMessages() {
+        if (channelId == null || channelId.isEmpty()) {
+            log.warn("⚠️ Channel ID не настроен, пропускаем удаление уведомлений об отсутствии занятий");
+            return;
+        }
+
+        LocalDate yesterday = LocalDate.now().minusDays(1);
+        log.info("🗑️ Удаление уведомлений об отсутствии занятий за вчера ({}) в 17:00 МСК", yesterday);
+        deleteMessagesForDateAndType(yesterday, "no_classes");
     }
 }

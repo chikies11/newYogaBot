@@ -1065,7 +1065,8 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
 
     public void sendMorningNotification(String morningLesson) {
         if (morningLesson == null || morningLesson.equals("ОТДЫХ") || morningLesson.equals("Отдых")) {
-            sendToChannel("🌅 На завтра утренних занятий нет");
+            String text = "🌅 На завтра утренних занятий нет";
+            sendToChannel(text);
             return;
         }
 
@@ -1086,7 +1087,8 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
 
     public void sendEveningNotification(String eveningLesson) {
         if (eveningLesson == null || eveningLesson.equals("ОТДЫХ") || eveningLesson.equals("Отдых")) {
-            sendToChannel("🌇 На завтра вечерних занятий нет");
+            String text = "🌇 На завтра вечерних занятий нет";
+            sendToChannel(text);
             return;
         }
 
@@ -1116,7 +1118,6 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
         boolean hasMorning = morningLesson != null && !morningLesson.equals("ОТДЫХ") && !morningLesson.equals("Отдых");
         boolean hasEvening = eveningLesson != null && !eveningLesson.equals("ОТДЫХ") && !eveningLesson.equals("Отдых");
 
-        // Отправляем уведомление если ЕСТЬ отсутствующие занятия
         if (!hasMorning && !hasEvening) {
             String text = "Ура, завтра занятий нет! Отдыхаем и восстанавливаемся! 💫";
             sendToChannel(text);
@@ -1125,7 +1126,6 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
         } else if (!hasEvening) {
             sendToChannel("🌇 На завтра вечерних занятий нет");
         } else {
-            // Если оба занятия есть, не отправляем ничего
             System.out.println("✅ Оба занятия есть, уведомление не требуется");
         }
     }
@@ -1167,17 +1167,24 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
             }
 
             String lessonType = "unknown";
-            LocalDate lessonDate = LocalDate.now().plusDays(1);
+            LocalDate lessonDate = LocalDate.now().plusDays(1); // по умолчанию завтра
 
-            if (text.contains("утренняя") || text.contains("Утренняя") || text.contains("🌅")) {
+            // Определяем тип занятия
+            if (text.contains("утренняя") || text.contains("Утренняя") || text.contains("🌅") ||
+                    text.contains("утренних") || text.contains("Утренних")) {
                 lessonType = "morning";
-            } else if (text.contains("вечерняя") || text.contains("Вечерняя") || text.contains("🌇")) {
+            } else if (text.contains("вечерняя") || text.contains("Вечерняя") || text.contains("🌇") ||
+                    text.contains("вечерних") || text.contains("Вечерних")) {
                 lessonType = "evening";
+            } else if (text.contains("занятий нет") || text.contains("Отдыхаем") || text.contains("отдыхаем")) {
+                // Это уведомление об отсутствии занятий - сохраняем как общее
+                lessonType = "no_classes";
             }
 
-            if (text.contains("завтра")) {
+            // Определяем дату
+            if (text.contains("завтра") || text.contains("Завтра")) {
                 lessonDate = LocalDate.now().plusDays(1);
-            } else if (text.contains("сегодня")) {
+            } else if (text.contains("сегодня") || text.contains("Сегодня")) {
                 lessonDate = LocalDate.now();
             }
 

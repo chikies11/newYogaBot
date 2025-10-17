@@ -76,4 +76,9 @@ public class NotificationScheduler {
         System.out.println("🔔 [SCHEDULER DEBUG] Дата МСК: " + moscowTime.toLocalDate().format(DateTimeFormatter.ofPattern("dd.MM.yyyy")));
         System.out.println("🔔 [SCHEDULER DEBUG] Следующие уведомления: 13:00 UTC (16:00 МСК)");
     }
+
+    @Scheduled(cron = "0 * * * * ?")
+    public void testTime() {
+        System.out.println("🕒 Тест времени: " + LocalDateTime.now(ZoneId.of("Europe/Moscow")));
+    }
 }
