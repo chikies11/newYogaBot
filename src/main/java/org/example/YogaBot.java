@@ -5,6 +5,7 @@ import org.example.service.MessageCleanupService;
 import org.example.service.MessageSender;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import jakarta.annotation.PostConstruct;
 import org.telegram.telegrambots.bots.TelegramWebhookBot;
@@ -49,16 +50,12 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
     private final DatabaseService databaseService;
     private final Map<Long, String> userStates = new HashMap<>();
     private final Map<DayOfWeek, Map<String, String>> fixedSchedule = new HashMap<>();
+    private final MessageCleanupService messageCleanupService;
 
-    private MessageCleanupService messageCleanupService;
-
-    @Autowired
-    public void setMessageCleanupService(MessageCleanupService messageCleanupService) {
-        this.messageCleanupService = messageCleanupService;
-    }
-
-    public YogaBot(DatabaseService databaseService) {
+    public YogaBot(DatabaseService databaseService,
+                   @Lazy MessageCleanupService messageCleanupService) {
         this.databaseService = databaseService;
+        this.messageCleanupService = messageCleanupService;
     }
 
     @PostConstruct

@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.telegram.telegrambots.bots.TelegramWebhookBot;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
@@ -20,14 +21,14 @@ public class MessageCleanupService {
     private static final Logger log = LoggerFactory.getLogger(MessageCleanupService.class);
 
     private final JdbcTemplate jdbcTemplate;
-    private final MessageSender messageSender;
+    private final TelegramWebhookBot telegramBot;
 
     @Value("${app.channelId:}")
     private String channelId;
 
-    public MessageCleanupService(JdbcTemplate jdbcTemplate, MessageSender messageSender) {
+    public MessageCleanupService(JdbcTemplate jdbcTemplate, TelegramWebhookBot telegramBot) {
         this.jdbcTemplate = jdbcTemplate;
-        this.messageSender = messageSender;
+        this.telegramBot = telegramBot;
     }
 
     @PostConstruct
@@ -126,7 +127,7 @@ public class MessageCleanupService {
     private boolean deleteMessageFromChannel(Integer messageId) {
         try {
             DeleteMessage deleteMessage = new DeleteMessage(channelId, messageId);
-            boolean result = messageSender.executeDeleteMessage(deleteMessage);
+            boolean result = telegramBot.execute(deleteMessage);
 
             if (result) {
                 log.info("✅ Сообщение {} удалено из канала", messageId);
