@@ -2,12 +2,15 @@ package org.example;
 
 import org.example.service.DatabaseService;
 import org.example.service.MessageCleanupService;
+import org.example.service.MessageSender;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import jakarta.annotation.PostConstruct;
 import org.telegram.telegrambots.bots.TelegramWebhookBot;
 import org.telegram.telegrambots.meta.api.methods.BotApiMethod;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
@@ -21,7 +24,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 @Component
-public class YogaBot extends TelegramWebhookBot {
+public class YogaBot extends TelegramWebhookBot implements MessageSender {
 
     @Value("${bot.username:}")
     private String botUsername;
@@ -38,14 +41,24 @@ public class YogaBot extends TelegramWebhookBot {
     @Value("${app.adminId:}")
     private String adminId;
 
+    @Override
+    public boolean executeDeleteMessage(DeleteMessage deleteMessage) throws TelegramApiException {
+        return execute(deleteMessage);
+    }
+
     private final DatabaseService databaseService;
     private final Map<Long, String> userStates = new HashMap<>();
     private final Map<DayOfWeek, Map<String, String>> fixedSchedule = new HashMap<>();
-    private final MessageCleanupService messageCleanupService;
 
-    public YogaBot(DatabaseService databaseService, MessageCleanupService messageCleanupService) {
-        this.databaseService = databaseService;
+    private MessageCleanupService messageCleanupService;
+
+    @Autowired
+    public void setMessageCleanupService(MessageCleanupService messageCleanupService) {
         this.messageCleanupService = messageCleanupService;
+    }
+
+    public YogaBot(DatabaseService databaseService) {
+        this.databaseService = databaseService;
     }
 
     @PostConstruct
@@ -1151,9 +1164,13 @@ public class YogaBot extends TelegramWebhookBot {
 
     private void saveMessageInfo(org.telegram.telegrambots.meta.api.objects.Message sentMessage, String text) {
         try {
-            // Определяем тип занятия и дату из текста сообщения
+            if (messageCleanupService == null) {
+                System.out.println("⚠️ MessageCleanupService не инициализирован");
+                return;
+            }
+
             String lessonType = "unknown";
-            LocalDate lessonDate = LocalDate.now().plusDays(1); // по умолчанию завтра
+            LocalDate lessonDate = LocalDate.now().plusDays(1);
 
             if (text.contains("утренняя") || text.contains("Утренняя") || text.contains("🌅")) {
                 lessonType = "morning";
@@ -1161,7 +1178,6 @@ public class YogaBot extends TelegramWebhookBot {
                 lessonType = "evening";
             }
 
-            // Парсим дату из текста если возможно
             if (text.contains("завтра")) {
                 lessonDate = LocalDate.now().plusDays(1);
             } else if (text.contains("сегодня")) {

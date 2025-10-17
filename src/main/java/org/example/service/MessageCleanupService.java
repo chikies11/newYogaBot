@@ -1,7 +1,5 @@
 package org.example.service;
 
-import jakarta.annotation.PostConstruct;
-import org.example.YogaBot;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -11,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
+import jakarta.annotation.PostConstruct;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -21,14 +20,14 @@ public class MessageCleanupService {
     private static final Logger log = LoggerFactory.getLogger(MessageCleanupService.class);
 
     private final JdbcTemplate jdbcTemplate;
-    private final YogaBot yogaBot;
+    private final MessageSender messageSender;
 
     @Value("${app.channelId:}")
     private String channelId;
 
-    public MessageCleanupService(JdbcTemplate jdbcTemplate, YogaBot yogaBot) {
+    public MessageCleanupService(JdbcTemplate jdbcTemplate, MessageSender messageSender) {
         this.jdbcTemplate = jdbcTemplate;
-        this.yogaBot = yogaBot;
+        this.messageSender = messageSender;
     }
 
     @PostConstruct
@@ -68,7 +67,7 @@ public class MessageCleanupService {
     }
 
     // Удаление вчерашней утренней отбивки в 8:00 МСК
-    @Scheduled(cron = "0 0 5 * * ?", zone = "Europe/Moscow") // 8:00 МСК = 5:00 UTC
+    @Scheduled(cron = "0 0 5 * * ?", zone = "Europe/Moscow")
     public void deleteYesterdayMorningMessages() {
         if (channelId == null || channelId.isEmpty()) {
             log.warn("⚠️ Channel ID не настроен, пропускаем удаление утренних сообщений");
@@ -77,12 +76,11 @@ public class MessageCleanupService {
 
         LocalDate yesterday = LocalDate.now().minusDays(1);
         log.info("🗑️ Удаление утренних сообщений за вчера ({}) в 8:00 МСК", yesterday);
-
         deleteMessagesForDateAndType(yesterday, "morning");
     }
 
     // Удаление вчерашней вечерней отбивки в 16:00 МСК
-    @Scheduled(cron = "0 0 13 * * ?", zone = "Europe/Moscow") // 16:00 МСК = 13:00 UTC
+    @Scheduled(cron = "0 0 13 * * ?", zone = "Europe/Moscow")
     public void deleteYesterdayEveningMessages() {
         if (channelId == null || channelId.isEmpty()) {
             log.warn("⚠️ Channel ID не настроен, пропускаем удаление вечерних сообщений");
@@ -91,7 +89,6 @@ public class MessageCleanupService {
 
         LocalDate yesterday = LocalDate.now().minusDays(1);
         log.info("🗑️ Удаление вечерних сообщений за вчера ({}) в 16:00 МСК", yesterday);
-
         deleteMessagesForDateAndType(yesterday, "evening");
     }
 
@@ -114,7 +111,6 @@ public class MessageCleanupService {
                 Integer messageId = (Integer) message.get("message_id");
                 if (deleteMessageFromChannel(messageId)) {
                     deletedCount++;
-                    // Удаляем запись из БД после успешного удаления из канала
                     jdbcTemplate.update("DELETE FROM channel_messages WHERE message_id = ? AND lesson_date = ? AND lesson_type = ?",
                             messageId, date, lessonType);
                 }
@@ -130,7 +126,7 @@ public class MessageCleanupService {
     private boolean deleteMessageFromChannel(Integer messageId) {
         try {
             DeleteMessage deleteMessage = new DeleteMessage(channelId, messageId);
-            boolean result = yogaBot.execute(deleteMessage);
+            boolean result = messageSender.executeDeleteMessage(deleteMessage);
 
             if (result) {
                 log.info("✅ Сообщение {} удалено из канала", messageId);
@@ -142,7 +138,7 @@ public class MessageCleanupService {
         } catch (TelegramApiException e) {
             if (e.getMessage().contains("message to delete not found")) {
                 log.info("ℹ️ Сообщение {} уже удалено из канала", messageId);
-                return true; // Считаем успехом, т.к. цель достигнута - сообщения нет
+                return true;
             }
             log.error("❌ Ошибка удаления сообщения {}: {}", messageId, e.getMessage());
             return false;
@@ -150,7 +146,7 @@ public class MessageCleanupService {
     }
 
     // Очистка старых записей из БД (старше 7 дней)
-    @Scheduled(cron = "0 0 2 * * ?") // Ежедневно в 2:00 UTC
+    @Scheduled(cron = "0 0 2 * * ?")
     public void cleanupOldRecords() {
         try {
             LocalDate weekAgo = LocalDate.now().minusDays(7);
