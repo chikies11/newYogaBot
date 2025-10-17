@@ -1,6 +1,7 @@
 package org.example;
 
 import org.example.service.DatabaseService;
+import org.example.service.MessageCleanupService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import jakarta.annotation.PostConstruct;
@@ -40,9 +41,11 @@ public class YogaBot extends TelegramWebhookBot {
     private final DatabaseService databaseService;
     private final Map<Long, String> userStates = new HashMap<>();
     private final Map<DayOfWeek, Map<String, String>> fixedSchedule = new HashMap<>();
+    private final MessageCleanupService messageCleanupService;
 
-    public YogaBot(DatabaseService databaseService) {
+    public YogaBot(DatabaseService databaseService, MessageCleanupService messageCleanupService) {
         this.databaseService = databaseService;
+        this.messageCleanupService = messageCleanupService;
     }
 
     @PostConstruct
@@ -239,10 +242,6 @@ public class YogaBot extends TelegramWebhookBot {
         System.out.println("🕒 Текущая дата Moscow: " + moscowTime.toLocalDate());
     }
 
-    private LocalDateTime getMoscowTime() {
-        return LocalDateTime.now(ZoneId.of("Europe/Moscow"));
-    }
-
     private LocalDate getMoscowDate() {
         return LocalDate.now(ZoneId.of("Europe/Moscow"));
     }
@@ -376,13 +375,9 @@ public class YogaBot extends TelegramWebhookBot {
                 System.out.println("🔔 Админ переключает уведомления");
                 toggleNotifications(chatId);
             }
-            case "📋 Все записи" -> {
-                System.out.println("📋 Админ запросил все записи");
-                showRegistrations(chatId);
-            }
             case "📋 Записи на сегодня" -> {
                 System.out.println("📋 Админ запросил записи на сегодня");
-                showTodayRegistrations(chatId); // ✅ ДОБАВЛЕНО ВЫЗОВ МЕТОДА
+                showTodayRegistrations(chatId);
             }
             case "📋 Записи на завтра" -> {
                 System.out.println("📋 Админ запросил записи на завтра");
@@ -411,122 +406,6 @@ public class YogaBot extends TelegramWebhookBot {
                 System.out.println("📝 Админ вводит текст: " + text);
                 handleState(chatId, text, userId);
             }
-        }
-    }
-
-    private void testInlineButtons(Long chatId) {
-        try {
-            System.out.println("🧪 Начало теста inline-кнопок");
-
-            String text = "🧪 *Тест inline-кнопок*\n\nЕсли вы видите это сообщение и кнопки ниже - значит inline-кнопки работают!";
-
-            InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
-            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-
-            // Простые кнопки
-            List<InlineKeyboardButton> row1 = new ArrayList<>();
-            row1.add(createInlineButton("✅ Тест 1", "test_button_1"));
-            row1.add(createInlineButton("✅ Тест 2", "test_button_2"));
-
-            List<InlineKeyboardButton> row2 = new ArrayList<>();
-            row2.add(createInlineButton("🔙 Назад", "test_back"));
-
-            rows.add(row1);
-            rows.add(row2);
-            markup.setKeyboard(rows);
-
-            SendMessage message = new SendMessage(chatId.toString(), text);
-            message.setParseMode("Markdown");
-            message.setReplyMarkup(markup);
-
-            System.out.println("🧪 Отправляем тестовое сообщение с кнопками...");
-            execute(message);
-            System.out.println("🧪 Тестовое сообщение отправлено успешно!");
-
-        } catch (Exception e) {
-            System.err.println("❌ Ошибка в тесте кнопок: " + e.getMessage());
-            e.printStackTrace();
-
-            try {
-                sendMsg(chatId, "❌ Ошибка теста: " + e.getMessage());
-            } catch (Exception ex) {
-                System.err.println("❌ Не удалось отправить сообщение об ошибке: " + ex.getMessage());
-            }
-        }
-    }
-
-    private void testScheduleMenu(Long chatId) {
-        try {
-            String text = "🐛 *Тестовое меню расписания*\n\nПроверка inline-кнопок:";
-
-            InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
-            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-
-            List<InlineKeyboardButton> row1 = new ArrayList<>();
-            row1.add(createInlineButton("🌅 Тест Утро", "schedule_morning"));
-            row1.add(createInlineButton("🌇 Тест Вечер", "schedule_evening"));
-
-            List<InlineKeyboardButton> row2 = new ArrayList<>();
-            row2.add(createInlineButton("🔙 Тест Назад", "back_to_main"));
-
-            rows.add(row1);
-            rows.add(row2);
-            markup.setKeyboard(rows);
-
-            SendMessage message = new SendMessage(chatId.toString(), text);
-            message.setParseMode("Markdown");
-            message.setReplyMarkup(markup);
-
-            execute(message);
-            System.out.println("✅ Тестовое меню отправлено");
-
-        } catch (Exception e) {
-            System.err.println("❌ Ошибка в тестовом меню: " + e.getMessage());
-            e.printStackTrace();
-        }
-    }
-
-    private void showAdminLogs(Long chatId) {
-        if (!isAdmin(chatId)) {
-            sendMsg(chatId, "❌ Недостаточно прав");
-            return;
-        }
-
-        try {
-            // Получаем логи из базы данных
-            List<Map<String, Object>> logs = databaseService.getAdminLogs(10); // последние 10 записей
-
-            if (logs.isEmpty()) {
-                sendMsg(chatId, "📊 *Логи действий администраторов*\n\nЛогов действий пока нет.");
-                return;
-            }
-
-            StringBuilder sb = new StringBuilder();
-            sb.append("📊 *Последние действия администраторов:*\n\n");
-
-            for (Map<String, Object> log : logs) {
-                String action = (String) log.get("action");
-                String details = (String) log.get("details");
-                String timestamp = ((java.sql.Timestamp) log.get("created_at")).toLocalDateTime()
-                        .format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
-                Long adminId = (Long) log.get("admin_id");
-
-                sb.append("🕒 *").append(timestamp).append("*\n");
-                sb.append("👤 Admin ID: ").append(adminId).append("\n");
-                sb.append("📝 Действие: ").append(getActionDescription(action)).append("\n");
-
-                if (details != null && !details.isEmpty()) {
-                    sb.append("ℹ️ Детали: ").append(details).append("\n");
-                }
-
-                sb.append("\n");
-            }
-
-            sendMsg(chatId, sb.toString());
-
-        } catch (Exception e) {
-            System.err.println("❌ Ошибка получения логов: " + e.getMessage());
-            sendMsg(chatId, "❌ Ошибка при загрузке логов действий");
         }
     }
 
@@ -583,7 +462,6 @@ public class YogaBot extends TelegramWebhookBot {
 
             KeyboardRow adminRow1 = new KeyboardRow();
             adminRow1.add("🔔 Уведомления");
-            adminRow1.add("📋 Все записи");
 
             KeyboardRow adminRow2 = new KeyboardRow();
             adminRow2.add("📋 Записи на сегодня");
@@ -616,38 +494,7 @@ public class YogaBot extends TelegramWebhookBot {
             System.err.println("❌ Ошибка отправки расписания: " + e.getMessage());
         }
     }
-
-    private void showUserRegistrations(Long chatId, Long userId) {
-        LocalDate tomorrow = getMoscowDate().plusDays(1);
-
-        try {
-            boolean hasMorning = databaseService.isUserRegistered(userId, tomorrow, "morning");
-            boolean hasEvening = databaseService.isUserRegistered(userId, tomorrow, "evening");
-
-            StringBuilder sb = new StringBuilder();
-            sb.append("📋 *Ваши записи на завтра (").append(tomorrow.format(DateTimeFormatter.ofPattern("dd.MM"))).append(")*\n\n");
-
-            if (!hasMorning && !hasEvening) {
-                sb.append("У вас нет записей на завтра.\n\n");
-                sb.append("Чтобы записаться, используйте кнопки в уведомлениях канала @Katys_yoga");
-            } else {
-                if (hasMorning) {
-                    sb.append("✅ Записан(а) на утреннюю практику\n");
-                }
-                if (hasEvening) {
-                    sb.append("✅ Записан(а) на вечернюю практику\n");
-                }
-                sb.append("\nЧтобы отменить запись, используйте кнопки в уведомлениях канала");
-            }
-
-            sendMsg(chatId, sb.toString());
-
-        } catch (Exception e) {
-            System.err.println("❌ Ошибка получения записей пользователя: " + e.getMessage());
-            sendMsg(chatId, "❌ Ошибка при загрузке ваших записей");
-        }
-    }
-
+    
     private void showScheduleMenu(Long chatId) {
         System.out.println("🎯 НАЧАЛО showScheduleMenu для чата " + chatId);
 
@@ -994,44 +841,6 @@ public class YogaBot extends TelegramWebhookBot {
         sendMsg(chatId, text);
     }
 
-    private void showRegistrations(Long chatId) {
-        LocalDate tomorrow = getMoscowDate().plusDays(1);
-        Map<String, List<String>> registrations = databaseService.getRegistrationsForDate(tomorrow);
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("📋 *Записи на завтра (").append(tomorrow.format(DateTimeFormatter.ofPattern("dd.MM"))).append(")*\n\n");
-
-        sb.append("🌅 *Утренняя практика:*\n");
-        if (registrations.get("morning").isEmpty()) {
-            sb.append("Записей пока нет\n\n");
-        } else {
-            int counter = 1;
-            for (String name : registrations.get("morning")) {
-                sb.append(counter).append(". ").append(name).append("\n");
-                counter++;
-            }
-            sb.append("\n");
-        }
-
-        sb.append("🌇 *Вечерняя практика:*\n");
-        if (registrations.get("evening").isEmpty()) {
-            sb.append("Записей пока нет");
-        } else {
-            int counter = 1;
-            for (String name : registrations.get("evening")) {
-                sb.append(counter).append(". ").append(name).append("\n");
-                counter++;
-            }
-        }
-
-        sb.append("\n\n📊 *Статистика:*\n");
-        sb.append("• Утренние: ").append(registrations.get("morning").size()).append(" чел.\n");
-        sb.append("• Вечерние: ").append(registrations.get("evening").size()).append(" чел.\n");
-        sb.append("• Всего: ").append(registrations.get("morning").size() + registrations.get("evening").size()).append(" чел.");
-
-        sendMsg(chatId, sb.toString());
-    }
-
     public Map<String, String> getScheduleForDate(LocalDate date) {
         Map<String, String> schedule = new HashMap<>();
         DayOfWeek dayOfWeek = date.getDayOfWeek();
@@ -1329,10 +1138,40 @@ public class YogaBot extends TelegramWebhookBot {
         }
 
         try {
-            execute(message);
-            System.out.println("✅ Уведомление отправлено в канал");
+            org.telegram.telegrambots.meta.api.objects.Message sentMessage = execute(message);
+            System.out.println("✅ Уведомление отправлено в канал, ID: " + sentMessage.getMessageId());
+
+            // Сохраняем ID сообщения для последующего удаления
+            saveMessageInfo(sentMessage, text);
+
         } catch (TelegramApiException e) {
             System.err.println("❌ Ошибка отправки в канал: " + e.getMessage());
+        }
+    }
+
+    private void saveMessageInfo(org.telegram.telegrambots.meta.api.objects.Message sentMessage, String text) {
+        try {
+            // Определяем тип занятия и дату из текста сообщения
+            String lessonType = "unknown";
+            LocalDate lessonDate = LocalDate.now().plusDays(1); // по умолчанию завтра
+
+            if (text.contains("утренняя") || text.contains("Утренняя") || text.contains("🌅")) {
+                lessonType = "morning";
+            } else if (text.contains("вечерняя") || text.contains("Вечерняя") || text.contains("🌇")) {
+                lessonType = "evening";
+            }
+
+            // Парсим дату из текста если возможно
+            if (text.contains("завтра")) {
+                lessonDate = LocalDate.now().plusDays(1);
+            } else if (text.contains("сегодня")) {
+                lessonDate = LocalDate.now();
+            }
+
+            messageCleanupService.saveMessageId(sentMessage.getMessageId(), lessonType, lessonDate);
+
+        } catch (Exception e) {
+            System.err.println("❌ Ошибка сохранения информации о сообщении: " + e.getMessage());
         }
     }
 

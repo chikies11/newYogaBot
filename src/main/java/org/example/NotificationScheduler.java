@@ -17,10 +17,10 @@ public class NotificationScheduler {
     }
 
     // Уведомления в 16:00 МСК = 13:00 UTC
-    @Scheduled(cron = "0 0 13 * * ?")
+    @Scheduled(cron = "0 0 16 * * ?", zone = "Europe/Moscow")
     public void sendAllNotifications() {
         LocalDateTime moscowTime = LocalDateTime.now(ZoneId.of("Europe/Moscow"));
-        System.out.println("⏰ [SCHEDULER] Отправка всех уведомлений в 16:00 МСК (13:00 UTC)...");
+        System.out.println("⏰ [SCHEDULER] Отправка всех уведомлений в 16:00 МСК...");
         System.out.println("⏰ [SCHEDULER] Текущее время МСК: " + moscowTime.format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")));
 
         // Используем московскую дату для определения "завтра"
