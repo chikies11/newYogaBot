@@ -309,4 +309,37 @@ public class WebhookController {
             return ResponseEntity.status(500).body("❌ Ошибка теста: " + e.getMessage());
         }
     }
+
+    @GetMapping("/create-test-messages")
+    public ResponseEntity<String> createTestMessages() {
+        try {
+            // Очищаем старые тестовые данные
+            jdbcTemplate.update("DELETE FROM channel_messages WHERE message_id >= 100000");
+
+            // Создаем тестовые сообщения для вчера
+            LocalDate yesterday = LocalDate.now().minusDays(1);
+
+            jdbcTemplate.update("INSERT INTO channel_messages (message_id, lesson_type, lesson_date) VALUES (?, ?, ?)",
+                    100001, "morning", yesterday);
+            jdbcTemplate.update("INSERT INTO channel_messages (message_id, lesson_type, lesson_date) VALUES (?, ?, ?)",
+                    100002, "evening", yesterday);
+            jdbcTemplate.update("INSERT INTO channel_messages (message_id, lesson_type, lesson_date) VALUES (?, ?, ?)",
+                    100003, "no_classes", yesterday);
+
+            return ResponseEntity.ok("""
+            ✅ Тестовые сообщения созданы!
+            
+            ID сообщений:
+            • 100001 - утреннее
+            • 100002 - вечернее  
+            • 100003 - нет занятий
+            
+            Дата: """ + yesterday + """
+            
+            Теперь вызовите /test-delete для проверки удаления
+            """);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("❌ Ошибка: " + e.getMessage());
+        }
+    }
 }
