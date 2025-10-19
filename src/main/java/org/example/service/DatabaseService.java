@@ -71,7 +71,7 @@ public class DatabaseService {
         }
     }
 
-    private void createTablesIfNotExists() {
+    public void createTablesIfNotExists() {
         try {
             // Удаляем старую таблицу если она существует со старой структурой
             try {

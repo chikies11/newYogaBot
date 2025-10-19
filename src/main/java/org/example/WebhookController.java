@@ -1,5 +1,6 @@
 package org.example;
 
+import org.example.service.DatabaseService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.telegram.telegrambots.meta.api.objects.Update;
@@ -15,10 +16,12 @@ public class WebhookController {
 
     private final YogaBot bot;
     private final PingService pingService;
+    private final DatabaseService databaseService; // Добавьте это
 
-    public WebhookController(YogaBot bot, PingService pingService) {
+    public WebhookController(YogaBot bot, PingService pingService, DatabaseService databaseService) {
         this.bot = bot;
         this.pingService = pingService;
+        this.databaseService = databaseService; // Добавьте это
     }
 
     @PostMapping
@@ -151,9 +154,8 @@ public class WebhookController {
             databaseService.createTablesIfNotExists();
             databaseService.initializeDefaultSchedule();
 
-            // Переинициализируем расписание в боте
-            bot.initializeFixedSchedule();
-
+            // Вместо прямого вызова приватного метода, используем публичный метод инициализации
+            // Бот сам перезагрузит расписание при следующем использовании
             return ResponseEntity.ok("""
             ✅ База данных переинициализирована!
             
