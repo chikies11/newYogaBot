@@ -174,24 +174,23 @@ public class DatabaseService {
             // Сначала убедимся, что таблица существует
             createTablesIfNotExists();
 
-            // Затем загружаем данные
-            Map<DayOfWeek, Map<String, String>> finalSchedule = schedule;
-            jdbcTemplate.query("SELECT day_of_week, lesson_type, description FROM lessons",
-                    rs -> {
-                        while (rs.next()) {
-                            try {
-                                DayOfWeek dayOfWeek = DayOfWeek.valueOf(rs.getString("day_of_week"));
-                                String lessonType = rs.getString("lesson_type");
-                                String description = rs.getString("description");
+            // Затем загружаем данные - используем List для обхода проблемы с final
+            List<Map<String, Object>> results = jdbcTemplate.queryForList(
+                    "SELECT day_of_week, lesson_type, description FROM lessons"
+            );
 
-                                finalSchedule.computeIfAbsent(dayOfWeek, k -> new HashMap<>())
-                                        .put(lessonType, description);
-                            } catch (IllegalArgumentException e) {
-                                log.warn("⚠️ Неизвестный день недели в БД: {}", rs.getString("day_of_week"));
-                            }
-                        }
-                        return null;
-                    });
+            for (Map<String, Object> row : results) {
+                try {
+                    DayOfWeek dayOfWeek = DayOfWeek.valueOf((String) row.get("day_of_week"));
+                    String lessonType = (String) row.get("lesson_type");
+                    String description = (String) row.get("description");
+
+                    schedule.computeIfAbsent(dayOfWeek, k -> new HashMap<>())
+                            .put(lessonType, description);
+                } catch (IllegalArgumentException e) {
+                    log.warn("⚠️ Неизвестный день недели в БД: {}", row.get("day_of_week"));
+                }
+            }
 
             log.info("✅ Загружено расписание из БД: {} записей", schedule.size());
         } catch (Exception e) {
@@ -202,31 +201,6 @@ public class DatabaseService {
         }
 
         return schedule;
-    }
-
-    public List<Map<String, Object>> getAdminLogs(int limit) {
-        try {
-            // Сначала создаем таблицу если её нет
-            jdbcTemplate.execute("""
-                CREATE TABLE IF NOT EXISTS admin_actions (
-                    id BIGSERIAL PRIMARY KEY,
-                    admin_id BIGINT NOT NULL,
-                    action VARCHAR(100) NOT NULL,
-                    details TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """);
-
-            return jdbcTemplate.queryForList("""
-                SELECT admin_id, action, details, created_at 
-                FROM admin_actions 
-                ORDER BY created_at DESC 
-                LIMIT ?
-            """, limit);
-        } catch (Exception e) {
-            log.error("❌ Ошибка получения логов админа", e);
-            return new ArrayList<>();
-        }
     }
 
     public void initializeDefaultSchedule() {
@@ -377,20 +351,6 @@ public class DatabaseService {
         }
     }
 
-    public boolean isUserRegistered(Long userId, LocalDate lessonDate, String lessonType) {
-        try {
-            Integer count = jdbcTemplate.queryForObject("""
-                SELECT COUNT(*) FROM registrations 
-                WHERE user_id = ? AND lesson_date = ? AND lesson_type = ?
-            """, Integer.class, userId, lessonDate, lessonType);
-
-            return count != null && count > 0;
-        } catch (Exception e) {
-            log.error("❌ Ошибка проверки регистрации", e);
-            return false;
-        }
-    }
-
     public Map<String, List<String>> getRegistrationsForDate(LocalDate date) {
         try {
             return jdbcTemplate.query("""
@@ -419,20 +379,6 @@ public class DatabaseService {
             emptyResult.put("morning", new ArrayList<>());
             emptyResult.put("evening", new ArrayList<>());
             return emptyResult;
-        }
-    }
-
-    public int getRegistrationCount(LocalDate date, String lessonType) {
-        try {
-            Integer count = jdbcTemplate.queryForObject("""
-                SELECT COUNT(*) FROM registrations 
-                WHERE lesson_date = ? AND lesson_type = ?
-            """, Integer.class, date, lessonType);
-
-            return count != null ? count : 0;
-        } catch (Exception e) {
-            log.error("❌ Ошибка получения количества регистраций", e);
-            return 0;
         }
     }
 }
