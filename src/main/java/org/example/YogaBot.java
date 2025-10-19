@@ -1098,7 +1098,6 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
 
         LocalDate tomorrow = getMoscowDate().plusDays(1);
         String text = "🌅 *Завтрашняя утренняя практика:*\n\n" + morningLesson + "\n\n";
-        text += "❗️*Майсор-класс подходит всем, особенно новичкам*❗️\n\n";
         text += "📍 *Место:* Yoga Shala\n\n";
         text += "Записаться⤵️";
 
@@ -1131,7 +1130,6 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
         }
 
         String text = "🌇 *Завтрашняя вечерняя практика:*\n\n" + eveningLesson + "\n\n";
-        text += "❗️*Майсор-класс подходит всем, особенно новичкам*❗️\n\n";
         text += "📍 *Место:* " + location + "\n\n";
         text += "Записаться⤵️";
 
