@@ -57,7 +57,7 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
     private final MessageCleanupService messageCleanupService;
 
     public YogaBot(DatabaseService databaseService,
-                   @Lazy MessageCleanupService messageCleanupService) {
+                   MessageCleanupService messageCleanupService) {
         this.databaseService = databaseService;
         this.messageCleanupService = messageCleanupService;
     }
@@ -1164,34 +1164,52 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
 
     private void saveMessageInfo(org.telegram.telegrambots.meta.api.objects.Message sentMessage, String text) {
         try {
-            log.info("💾 Сохранение сообщения ID: {}, текст: {}", sentMessage.getMessageId(),
-                    text.substring(0, Math.min(50, text.length())));
+            log.info("💾 Начало сохранения сообщения ID: {}", sentMessage.getMessageId());
+
+            if (messageCleanupService == null) {
+                log.error("❌ MessageCleanupService is NULL!");
+                return;
+            }
 
             String lessonType = "unknown";
-            LocalDate lessonDate = LocalDate.now().plusDays(1); // по умолчанию завтра
+            LocalDate lessonDate = LocalDate.now().plusDays(1);
+
+            // Логируем текст для отладки
+            log.info("📝 Текст сообщения для анализа: {}", text.substring(0, Math.min(100, text.length())));
 
             // Определяем тип занятия
             if (text.contains("утренняя") || text.contains("Утренняя") || text.contains("🌅") ||
-                    text.contains("утренних") || text.contains("Утренних")) {
+                    text.contains("утренних") || text.contains("Утренних") || text.contains("Утренняя")) {
                 lessonType = "morning";
+                log.info("🔍 Определен тип: morning");
             } else if (text.contains("вечерняя") || text.contains("Вечерняя") || text.contains("🌇") ||
-                    text.contains("вечерних") || text.contains("Вечерних")) {
+                    text.contains("вечерних") || text.contains("Вечерних") || text.contains("Вечерняя")) {
                 lessonType = "evening";
-            } else if (text.contains("занятий нет") || text.contains("Отдыхаем") || text.contains("отдыхаем")) {
+                log.info("🔍 Определен тип: evening");
+            } else if (text.contains("занятий нет") || text.contains("Отдыхаем") || text.contains("отдыхаем") ||
+                    text.contains("нет занятий")) {
                 lessonType = "no_classes";
+                log.info("🔍 Определен тип: no_classes");
+            } else {
+                log.warn("⚠️ Не удалось определить тип занятия для текста: {}", text.substring(0, Math.min(50, text.length())));
             }
 
             // Определяем дату
             if (text.contains("завтра") || text.contains("Завтра")) {
                 lessonDate = LocalDate.now().plusDays(1);
+                log.info("📅 Дата: завтра ({})", lessonDate);
             } else if (text.contains("сегодня") || text.contains("Сегодня")) {
                 lessonDate = LocalDate.now();
+                log.info("📅 Дата: сегодня ({})", lessonDate);
+            } else {
+                log.info("📅 Дата по умолчанию: завтра ({})", lessonDate);
             }
 
-            log.info("📅 Сохранение: messageId={}, type={}, date={}",
+            log.info("💾 Сохранение: messageId={}, type={}, date={}",
                     sentMessage.getMessageId(), lessonType, lessonDate);
 
             messageCleanupService.saveMessageId(sentMessage.getMessageId(), lessonType, lessonDate);
+            log.info("✅ Сообщение успешно сохранено в БД");
 
         } catch (Exception e) {
             log.error("❌ Ошибка сохранения информации о сообщении", e);
@@ -1319,5 +1337,10 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
 
         System.out.println("❌ Пользователь " + userId + " НЕ является админом. Настроенные админы: " + Arrays.toString(adminIds));
         return false;
+    }
+
+    // Публичный метод для тестирования
+    public void testSaveMessageInfo(org.telegram.telegrambots.meta.api.objects.Message message, String text) {
+        saveMessageInfo(message, text);
     }
 }

@@ -278,4 +278,35 @@ public class WebhookController {
             return ResponseEntity.status(500).build();
         }
     }
+
+    @GetMapping("/test-save-message")
+    public ResponseEntity<String> testSaveMessage() {
+        try {
+            // Создаем тестовое сообщение
+            org.telegram.telegrambots.meta.api.objects.Message testMessage =
+                    new org.telegram.telegrambots.meta.api.objects.Message();
+
+            // Устанавливаем ID через рефлексию (для теста)
+            java.lang.reflect.Field field = testMessage.getClass().getDeclaredField("messageId");
+            field.setAccessible(true);
+            field.set(testMessage, 999999); // тестовый ID
+
+            String testText = "🌅 Завтрашняя утренняя практика:\n\n8:00 - 11:30 - Майсор класс";
+
+            // Вызываем метод сохранения
+            bot.testSaveMessageInfo(testMessage, testText);
+
+            return ResponseEntity.ok("""
+            ✅ Тест сохранения сообщения запущен!
+            
+            Проверьте:
+            1. Логи - должно быть сообщение о сохранении
+            2. /debug/messages - должен появиться новый ID
+            
+            ID тестового сообщения: 999999
+            """);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("❌ Ошибка теста: " + e.getMessage());
+        }
+    }
 }
