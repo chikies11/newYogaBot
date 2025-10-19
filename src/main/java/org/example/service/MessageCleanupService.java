@@ -22,14 +22,14 @@ public class MessageCleanupService {
     private static final Logger log = LoggerFactory.getLogger(MessageCleanupService.class);
 
     private final JdbcTemplate jdbcTemplate;
-    private final TelegramWebhookBot telegramBot;
+    private final TelegramService telegramService; // Используем TelegramService вместо YogaBot
 
     @Value("${app.channelId:}")
     private String channelId;
 
-    public MessageCleanupService(JdbcTemplate jdbcTemplate, TelegramWebhookBot telegramBot) {
+    public MessageCleanupService(JdbcTemplate jdbcTemplate, TelegramService telegramService) {
         this.jdbcTemplate = jdbcTemplate;
-        this.telegramBot = telegramBot;
+        this.telegramService = telegramService;
     }
 
     @PostConstruct
@@ -165,8 +165,8 @@ public class MessageCleanupService {
 
     private boolean deleteMessageFromChannel(Integer messageId) {
         try {
-            DeleteMessage deleteMessage = new DeleteMessage(channelId, messageId);
-            boolean result = telegramBot.execute(deleteMessage);
+            log.info("🗑️ Попытка удаления сообщения {} из канала {}", messageId, channelId);
+            boolean result = telegramService.deleteMessageFromChannel(messageId);
 
             if (result) {
                 log.info("✅ Сообщение {} удалено из канала", messageId);
@@ -175,11 +175,7 @@ public class MessageCleanupService {
             }
 
             return result;
-        } catch (TelegramApiException e) {
-            if (e.getMessage().contains("message to delete not found")) {
-                log.info("ℹ️ Сообщение {} уже удалено из канала", messageId);
-                return true;
-            }
+        } catch (Exception e) {
             log.error("❌ Ошибка удаления сообщения {}: {}", messageId, e.getMessage());
             return false;
         }

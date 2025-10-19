@@ -57,7 +57,7 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
     private final MessageCleanupService messageCleanupService;
 
     public YogaBot(DatabaseService databaseService,
-                   @Lazy MessageCleanupService messageCleanupService) {
+                   @Lazy MessageCleanupService messageCleanupService) { // Добавляем @Lazy
         this.databaseService = databaseService;
         this.messageCleanupService = messageCleanupService;
     }
