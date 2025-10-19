@@ -3,11 +3,9 @@ package org.example.service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.telegram.telegrambots.bots.TelegramWebhookBot;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
@@ -70,6 +68,23 @@ public class MessageCleanupService {
         }
     }
 
+    // 🔧 ТЕСТОВЫЕ МЕТОДЫ ДЛЯ РУЧНОГО ЗАПУСКА
+
+    public void testMorningDeletion() {
+        log.info("🧪 РУЧНОЙ ТЕСТ: Удаление утренних сообщений");
+        deleteYesterdayMorningMessages();
+    }
+
+    public void testEveningDeletion() {
+        log.info("🧪 РУЧНОЙ ТЕСТ: Удаление вечерних сообщений");
+        deleteYesterdayEveningMessages();
+    }
+
+    public void testNoClassesDeletion() {
+        log.info("🧪 РУЧНОЙ ТЕСТ: Удаление сообщений об отсутствии занятий");
+        deleteYesterdayNoClassesMessages();
+    }
+
     // Удаление вчерашней утренней отбивки в 8:00 МСК
     @Scheduled(cron = "0 0 8 * * ?")
     public void deleteYesterdayMorningMessages() {
@@ -81,15 +96,17 @@ public class MessageCleanupService {
         }
 
         LocalDate yesterday = LocalDate.now().minusDays(1);
-        log.info("🗑️ Удаление утренних сообщений за {}", yesterday);
+        log.info("🗑️ Удаление утренних сообщений за вчера ({}) в 8:00 МСК", yesterday);
         deleteMessagesForDateAndType(yesterday, "morning");
     }
 
     // Удаление вчерашней вечерней отбивки в 16:00 МСК
     @Scheduled(cron = "0 0 16 * * ?")
     public void deleteYesterdayEveningMessages() {
+        log.info("🔄 ЗАПУСК deleteYesterdayEveningMessages в {}", LocalDateTime.now());
+
         if (channelId == null || channelId.isEmpty()) {
-            log.warn("⚠️ Channel ID не настроен, пропускаем удаление вечерних сообщений");
+            log.error("❌ Channel ID не настроен: {}", channelId);
             return;
         }
 
@@ -98,20 +115,36 @@ public class MessageCleanupService {
         deleteMessagesForDateAndType(yesterday, "evening");
     }
 
-    private void deleteMessagesForDateAndType(LocalDate date, String lessonType) {
+    // Удаление вчерашних уведомлений об отсутствии занятий в 17:00 МСК
+    @Scheduled(cron = "0 0 17 * * ?")
+    public void deleteYesterdayNoClassesMessages() {
+        log.info("🔄 ЗАПУСК deleteYesterdayNoClassesMessages в {}", LocalDateTime.now());
+
+        if (channelId == null || channelId.isEmpty()) {
+            log.error("❌ Channel ID не настроен: {}", channelId);
+            return;
+        }
+
+        LocalDate yesterday = LocalDate.now().minusDays(1);
+        log.info("🗑️ Удаление уведомлений об отсутствии занятий за вчера ({}) в 17:00 МСК", yesterday);
+        deleteMessagesForDateAndType(yesterday, "no_classes");
+    }
+
+    public void deleteMessagesForDateAndType(LocalDate date, String lessonType) {
         try {
+            log.info("🔍 Поиск сообщений для удаления: date={}, type={}", date, lessonType);
 
             List<Map<String, Object>> messages = jdbcTemplate.queryForList("""
-            SELECT message_id FROM channel_messages 
-            WHERE lesson_date = ? AND lesson_type = ?
-        """, date, lessonType);
+                SELECT message_id FROM channel_messages 
+                WHERE lesson_date = ? AND lesson_type = ?
+            """, date, lessonType);
+
+            log.info("📋 Найдено сообщений для удаления: {} для {} {}", messages.size(), date, lessonType);
 
             if (messages.isEmpty()) {
                 log.info("ℹ️ Не найдено сообщений для удаления: {} {}", date, lessonType);
                 return;
             }
-
-            log.info("🔍 Найдено {} сообщений для удаления: {} {}", messages.size(), date, lessonType);
 
             int deletedCount = 0;
             for (Map<String, Object> message : messages) {
@@ -163,34 +196,6 @@ public class MessageCleanupService {
             }
         } catch (Exception e) {
             log.error("❌ Ошибка очистки старых записей", e);
-        }
-    }
-
-    // Удаление вчерашних уведомлений об отсутствии занятий в 17:00 МСК
-    @Scheduled(cron = "0 1 16 * * ?", zone = "Europe/Moscow") // 17:00 МСК = 14:00 UTC
-    public void deleteYesterdayNoClassesMessages() {
-        if (channelId == null || channelId.isEmpty()) {
-            log.warn("⚠️ Channel ID не настроен, пропускаем удаление уведомлений об отсутствии занятий");
-            return;
-        }
-
-        LocalDate yesterday = LocalDate.now().minusDays(1);
-        log.info("🗑️ Удаление уведомлений об отсутствии занятий за вчера ({}) в 17:00 МСК", yesterday);
-        deleteMessagesForDateAndType(yesterday, "no_classes");
-    }
-
-    @GetMapping("/debug/messages")
-    public ResponseEntity<List<Map<String, Object>>> debugMessages() {
-        try {
-            List<Map<String, Object>> messages = jdbcTemplate.queryForList("""
-            SELECT * FROM channel_messages 
-            ORDER BY lesson_date DESC, lesson_type
-            LIMIT 10
-        """);
-            return ResponseEntity.ok(messages);
-        } catch (Exception e) {
-            log.error("❌ Ошибка получения сообщений", e);
-            return ResponseEntity.status(500).build();
         }
     }
 }
