@@ -916,11 +916,17 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
 
     public void sendTodayMorningNotification() {
         LocalDate today = getMoscowDate();
-        Map<String, String> todaySchedule = getScheduleForDate(today); // ИСПРАВЛЕНО
+        Map<String, String> todaySchedule = getScheduleForDate(today);
         String morningLesson = todaySchedule.get("morning");
 
-        if (morningLesson == null || morningLesson.equals("ОТДЫХ") || morningLesson.equals("Отдых")) {
-            sendToChannel("🌅 На сегодня утренних занятий нет");
+        boolean hasMorning = morningLesson != null && !morningLesson.equals("ОТДЫХ") && !morningLesson.equals("Отдых");
+
+        if (!hasMorning) {
+            String text = "🌅 На сегодня утренних занятий нет";
+            org.telegram.telegrambots.meta.api.objects.Message sentMessage = sendToChannel(text);
+            if (sentMessage != null) {
+                saveMessageInfo(sentMessage, text);
+            }
             return;
         }
 
@@ -934,16 +940,25 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
         row.add(createInlineButton("❌ Отменить запись", "cancel_morning_" + today));
         markup.setKeyboard(List.of(row));
 
-        sendToChannel(text, markup);
+        org.telegram.telegrambots.meta.api.objects.Message sentMessage = sendToChannel(text, markup);
+        if (sentMessage != null) {
+            saveMessageInfo(sentMessage, text);
+        }
     }
 
     public void sendTodayEveningNotification() {
         LocalDate today = getMoscowDate();
-        Map<String, String> todaySchedule = getScheduleForDate(today); // ИСПРАВЛЕНО
+        Map<String, String> todaySchedule = getScheduleForDate(today);
         String eveningLesson = todaySchedule.get("evening");
 
-        if (eveningLesson == null || eveningLesson.equals("ОТДЫХ") || eveningLesson.equals("Отдых")) {
-            sendToChannel("🌇 На сегодня вечерних занятий нет");
+        boolean hasEvening = eveningLesson != null && !eveningLesson.equals("ОТДЫХ") && !eveningLesson.equals("Отдых");
+
+        if (!hasEvening) {
+            String text = "🌇 На сегодня вечерних занятий нет";
+            org.telegram.telegrambots.meta.api.objects.Message sentMessage = sendToChannel(text);
+            if (sentMessage != null) {
+                saveMessageInfo(sentMessage, text);
+            }
             return;
         }
 
@@ -963,7 +978,10 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
         row.add(createInlineButton("❌ Отменить запись", "cancel_evening_" + today));
         markup.setKeyboard(List.of(row));
 
-        sendToChannel(text, markup);
+        org.telegram.telegrambots.meta.api.objects.Message sentMessage = sendToChannel(text, markup);
+        if (sentMessage != null) {
+            saveMessageInfo(sentMessage, text);
+        }
     }
 
     public void sendTodayNotification() {
@@ -1071,13 +1089,17 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
     public void sendMorningNotification(String morningLesson) {
         if (morningLesson == null || morningLesson.equals("ОТДЫХ") || morningLesson.equals("Отдых")) {
             String text = "🌅 На завтра утренних занятий нет";
-            sendToChannel(text);
+            org.telegram.telegrambots.meta.api.objects.Message sentMessage = sendToChannel(text);
+            if (sentMessage != null) {
+                saveMessageInfo(sentMessage, text);
+            }
             return;
         }
 
         LocalDate tomorrow = getMoscowDate().plusDays(1);
         String text = "🌅 *Завтрашняя утренняя практика:*\n\n" + morningLesson + "\n\n";
-        text += "📍 *Место:* Yoga Shala\n\n"; // ВСЕГДА Yoga Shala для утренних занятий
+        text += "❗️*Майсор-класс подходит всем, особенно новичкам*❗️\n\n";
+        text += "📍 *Место:* Yoga Shala\n\n";
         text += "Записаться⤵️";
 
         InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
@@ -1086,25 +1108,30 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
         row.add(createInlineButton("❌ Отменить запись", "cancel_morning_" + tomorrow));
         markup.setKeyboard(List.of(row));
 
-        sendToChannel(text, markup);
+        org.telegram.telegrambots.meta.api.objects.Message sentMessage = sendToChannel(text, markup);
+        if (sentMessage != null) {
+            saveMessageInfo(sentMessage, text);
+        }
     }
 
     public void sendEveningNotification(String eveningLesson) {
         if (eveningLesson == null || eveningLesson.equals("ОТДЫХ") || eveningLesson.equals("Отдых")) {
             String text = "🌇 На завтра вечерних занятий нет";
-            sendToChannel(text);
+            org.telegram.telegrambots.meta.api.objects.Message sentMessage = sendToChannel(text);
+            if (sentMessage != null) {
+                saveMessageInfo(sentMessage, text);
+            }
             return;
         }
 
         LocalDate tomorrow = getMoscowDate().plusDays(1);
-
-        // Определяем место проведения: ТОЛЬКО для вечернего занятия во вторник - "Аргуновский"
-        String location = "Yoga Shala"; // по умолчанию
+        String location = "Yoga Shala";
         if (tomorrow.getDayOfWeek() == DayOfWeek.TUESDAY) {
             location = "Аргуновский";
         }
 
         String text = "🌇 *Завтрашняя вечерняя практика:*\n\n" + eveningLesson + "\n\n";
+        text += "❗️*Майсор-класс подходит всем, особенно новичкам*❗️\n\n";
         text += "📍 *Место:* " + location + "\n\n";
         text += "Записаться⤵️";
 
@@ -1114,7 +1141,10 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
         row.add(createInlineButton("❌ Отменить запись", "cancel_evening_" + tomorrow));
         markup.setKeyboard(List.of(row));
 
-        sendToChannel(text, markup);
+        org.telegram.telegrambots.meta.api.objects.Message sentMessage = sendToChannel(text, markup);
+        if (sentMessage != null) {
+            saveMessageInfo(sentMessage, text);
+        }
     }
 
     public void sendNoClassesNotification(String morningLesson, String eveningLesson) {
@@ -1123,24 +1153,35 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
 
         if (!hasMorning && !hasEvening) {
             String text = "Ура, завтра занятий нет! Отдыхаем и восстанавливаемся! 💫";
-            sendToChannel(text);
+            org.telegram.telegrambots.meta.api.objects.Message sentMessage = sendToChannel(text);
+            if (sentMessage != null) {
+                saveMessageInfo(sentMessage, text);
+            }
         } else if (!hasMorning) {
-            sendToChannel("🌅 На завтра утренних занятий нет");
+            String text = "🌅 На завтра утренних занятий нет";
+            org.telegram.telegrambots.meta.api.objects.Message sentMessage = sendToChannel(text);
+            if (sentMessage != null) {
+                saveMessageInfo(sentMessage, text);
+            }
         } else if (!hasEvening) {
-            sendToChannel("🌇 На завтра вечерних занятий нет");
+            String text = "🌇 На завтра вечерних занятий нет";
+            org.telegram.telegrambots.meta.api.objects.Message sentMessage = sendToChannel(text);
+            if (sentMessage != null) {
+                saveMessageInfo(sentMessage, text);
+            }
         } else {
             System.out.println("✅ Оба занятия есть, уведомление не требуется");
         }
     }
 
-    private void sendToChannel(String text) {
-        sendToChannel(text, null);
+    private org.telegram.telegrambots.meta.api.objects.Message sendToChannel(String text) {
+        return sendToChannel(text, null);
     }
 
-    private void sendToChannel(String text, InlineKeyboardMarkup markup) {
+    private org.telegram.telegrambots.meta.api.objects.Message sendToChannel(String text, InlineKeyboardMarkup markup) {
         if (channelId == null || channelId.isEmpty()) {
             System.out.println("⚠️ Channel ID не настроен");
-            return;
+            return null;
         }
 
         SendMessage message = new SendMessage(channelId, text);
@@ -1153,12 +1194,10 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
         try {
             org.telegram.telegrambots.meta.api.objects.Message sentMessage = execute(message);
             System.out.println("✅ Уведомление отправлено в канал, ID: " + sentMessage.getMessageId());
-
-            // Сохраняем ID сообщения для последующего удаления
-            saveMessageInfo(sentMessage, text);
-
+            return sentMessage;
         } catch (TelegramApiException e) {
             System.err.println("❌ Ошибка отправки в канал: " + e.getMessage());
+            return null;
         }
     }
 
