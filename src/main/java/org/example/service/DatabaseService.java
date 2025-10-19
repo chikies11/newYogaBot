@@ -32,7 +32,7 @@ public class DatabaseService {
         initializeDatabase();
     }
 
-    private void initializeDatabase() {
+    public void initializeDatabase() {
         try {
             // Проверяем соединение
             jdbcTemplate.execute("SELECT 1");
@@ -93,39 +93,42 @@ public class DatabaseService {
                 UNIQUE(day_of_week, lesson_type)
             )
         """);
+            log.info("✅ Таблица lessons создана/проверена");
 
             jdbcTemplate.execute("""
-                CREATE TABLE IF NOT EXISTS registrations (
-                    id BIGSERIAL PRIMARY KEY,
-                    user_id BIGINT NOT NULL,
-                    username VARCHAR(255),
-                    display_name VARCHAR(255) NOT NULL,
-                    lesson_date DATE NOT NULL,
-                    lesson_type VARCHAR(10) NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(user_id, lesson_date, lesson_type)
-                )
-            """);
+            CREATE TABLE IF NOT EXISTS registrations (
+                id BIGSERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL,
+                username VARCHAR(255),
+                display_name VARCHAR(255) NOT NULL,
+                lesson_date DATE NOT NULL,
+                lesson_type VARCHAR(10) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, lesson_date, lesson_type)
+            )
+        """);
+            log.info("✅ Таблица registrations создана/проверена");
 
             jdbcTemplate.execute("""
-                CREATE TABLE IF NOT EXISTS bot_settings (
-                    id INTEGER PRIMARY KEY,
-                    notifications_enabled BOOLEAN DEFAULT true,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """);
+            CREATE TABLE IF NOT EXISTS bot_settings (
+                id INTEGER PRIMARY KEY,
+                notifications_enabled BOOLEAN DEFAULT true,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """);
+            log.info("✅ Таблица bot_settings создана/проверена");
 
             // Инициализируем настройки по умолчанию
             jdbcTemplate.update("""
-                INSERT INTO bot_settings (id, notifications_enabled) 
-                VALUES (1, true) 
-                ON CONFLICT (id) DO NOTHING
-            """);
-
-            log.info("✅ Таблицы базы данных проверены/созданы");
+            INSERT INTO bot_settings (id, notifications_enabled) 
+            VALUES (1, true) 
+            ON CONFLICT (id) DO NOTHING
+        """);
+            log.info("✅ Настройки бота инициализированы");
 
         } catch (Exception e) {
             log.error("❌ Ошибка создания таблиц", e);
+            throw new RuntimeException("Ошибка инициализации базы данных", e);
         }
     }
 
@@ -168,7 +171,11 @@ public class DatabaseService {
         Map<DayOfWeek, Map<String, String>> schedule = new HashMap<>();
 
         try {
-            // Просто пытаемся загрузить данные, если таблицы нет - вернется пустой результат
+            // Сначала убедимся, что таблица существует
+            createTablesIfNotExists();
+
+            // Затем загружаем данные
+            Map<DayOfWeek, Map<String, String>> finalSchedule = schedule;
             jdbcTemplate.query("SELECT day_of_week, lesson_type, description FROM lessons",
                     rs -> {
                         while (rs.next()) {
@@ -177,24 +184,7 @@ public class DatabaseService {
                                 String lessonType = rs.getString("lesson_type");
                                 String description = rs.getString("description");
 
-                                schedule.computeIfAbsent(dayOfWeek, k -> new HashMap<>())
-                                        .put(lessonType, description);
-                            } catch (IllegalArgumentException e) {
-                                log.warn("⚠️ Неизвестный день недели в БД: {}", rs.getString("day_of_week"));
-                            }
-                        }
-                        return null;
-                    });
-
-            jdbcTemplate.query("SELECT day_of_week, lesson_type, description FROM lessons",
-                    rs -> {
-                        while (rs.next()) {
-                            try {
-                                DayOfWeek dayOfWeek = DayOfWeek.valueOf(rs.getString("day_of_week"));
-                                String lessonType = rs.getString("lesson_type");
-                                String description = rs.getString("description");
-
-                                schedule.computeIfAbsent(dayOfWeek, k -> new HashMap<>())
+                                finalSchedule.computeIfAbsent(dayOfWeek, k -> new HashMap<>())
                                         .put(lessonType, description);
                             } catch (IllegalArgumentException e) {
                                 log.warn("⚠️ Неизвестный день недели в БД: {}", rs.getString("day_of_week"));
@@ -206,6 +196,9 @@ public class DatabaseService {
             log.info("✅ Загружено расписание из БД: {} записей", schedule.size());
         } catch (Exception e) {
             log.error("❌ Ошибка загрузки расписания", e);
+            // Если таблицы нет, создаем дефолтное расписание
+            initializeDefaultSchedule();
+            schedule = createDefaultSchedule();
         }
 
         return schedule;

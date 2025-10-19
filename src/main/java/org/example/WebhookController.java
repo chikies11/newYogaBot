@@ -143,4 +143,27 @@ public class WebhookController {
             return ResponseEntity.status(500).body("❌ Ошибка: " + e.getMessage());
         }
     }
+
+    @GetMapping("/reinit-db")
+    public ResponseEntity<String> reinitDatabase() {
+        try {
+            // Принудительно пересоздаем таблицы
+            databaseService.createTablesIfNotExists();
+            databaseService.initializeDefaultSchedule();
+
+            // Переинициализируем расписание в боте
+            bot.initializeFixedSchedule();
+
+            return ResponseEntity.ok("""
+            ✅ База данных переинициализирована!
+            
+            Выполнено:
+            • Создание таблиц
+            • Инициализация расписания
+            • Обновление кэша бота
+            """);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("❌ Ошибка переинициализации БД: " + e.getMessage());
+        }
+    }
 }

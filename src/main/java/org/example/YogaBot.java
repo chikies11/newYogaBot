@@ -77,6 +77,9 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
             }
         }
 
+        // Принудительная инициализация БД
+        databaseService.initializeDatabase();
+
         initializeFixedSchedule();
         System.out.println("✅ YogaBot инициализирован");
     }
