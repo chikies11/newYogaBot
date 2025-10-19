@@ -3,15 +3,18 @@ package org.example.service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.telegram.telegrambots.bots.TelegramWebhookBot;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import jakarta.annotation.PostConstruct;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -70,13 +73,15 @@ public class MessageCleanupService {
     // Удаление вчерашней утренней отбивки в 8:00 МСК
     @Scheduled(cron = "0 0 8 * * ?")
     public void deleteYesterdayMorningMessages() {
+        log.info("🔄 ЗАПУСК deleteYesterdayMorningMessages в {}", LocalDateTime.now());
+
         if (channelId == null || channelId.isEmpty()) {
-            log.warn("⚠️ Channel ID не настроен, пропускаем удаление утренних сообщений");
+            log.error("❌ Channel ID не настроен: {}", channelId);
             return;
         }
 
         LocalDate yesterday = LocalDate.now().minusDays(1);
-        log.info("🗑️ Удаление утренних сообщений за вчера ({}) в 8:00 МСК", yesterday);
+        log.info("🗑️ Удаление утренних сообщений за {}", yesterday);
         deleteMessagesForDateAndType(yesterday, "morning");
     }
 
@@ -95,6 +100,7 @@ public class MessageCleanupService {
 
     private void deleteMessagesForDateAndType(LocalDate date, String lessonType) {
         try {
+
             List<Map<String, Object>> messages = jdbcTemplate.queryForList("""
             SELECT message_id FROM channel_messages 
             WHERE lesson_date = ? AND lesson_type = ?
@@ -171,5 +177,20 @@ public class MessageCleanupService {
         LocalDate yesterday = LocalDate.now().minusDays(1);
         log.info("🗑️ Удаление уведомлений об отсутствии занятий за вчера ({}) в 17:00 МСК", yesterday);
         deleteMessagesForDateAndType(yesterday, "no_classes");
+    }
+
+    @GetMapping("/debug/messages")
+    public ResponseEntity<List<Map<String, Object>>> debugMessages() {
+        try {
+            List<Map<String, Object>> messages = jdbcTemplate.queryForList("""
+            SELECT * FROM channel_messages 
+            ORDER BY lesson_date DESC, lesson_type
+            LIMIT 10
+        """);
+            return ResponseEntity.ok(messages);
+        } catch (Exception e) {
+            log.error("❌ Ошибка получения сообщений", e);
+            return ResponseEntity.status(500).build();
+        }
     }
 }

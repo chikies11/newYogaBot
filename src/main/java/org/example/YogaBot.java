@@ -2,6 +2,8 @@ package org.example;
 
 import org.example.service.DatabaseService;
 import org.example.service.MessageCleanupService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.example.service.MessageSender;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -26,6 +28,8 @@ import java.util.*;
 
 @Component
 public class YogaBot extends TelegramWebhookBot implements MessageSender {
+
+    private static final Logger log = LoggerFactory.getLogger(YogaBot.class);
 
     @Value("${bot.username:}")
     private String botUsername;
@@ -918,7 +922,6 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
         }
 
         String text = "🌅 *Сегодняшняя утренняя практика:*\n\n" + morningLesson + "\n\n";
-        text += "❗️*Майсор-класс подходит всем, особенно новичкам*❗️\n\n";
         text += "📍 *Место:* Yoga Shala\n\n";
         text += "Записаться⤵️";
 
@@ -948,7 +951,6 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
         }
 
         String text = "🌇 *Сегодняшняя вечерняя практика:*\n\n" + eveningLesson + "\n\n";
-        text += "❗️*Майсор-класс подходит всем, особенно новичкам*❗️\n\n";
         text += "📍 *Место:* " + location + "\n\n";
         text += "Записаться⤵️";
 
@@ -1072,7 +1074,6 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
 
         LocalDate tomorrow = getMoscowDate().plusDays(1);
         String text = "🌅 *Завтрашняя утренняя практика:*\n\n" + morningLesson + "\n\n";
-        text += "❗️*Майсор-класс подходит всем, особенно новичкам*❗️\n\n";
         text += "📍 *Место:* Yoga Shala\n\n"; // ВСЕГДА Yoga Shala для утренних занятий
         text += "Записаться⤵️";
 
@@ -1101,7 +1102,6 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
         }
 
         String text = "🌇 *Завтрашняя вечерняя практика:*\n\n" + eveningLesson + "\n\n";
-        text += "❗️*Майсор-класс подходит всем, особенно новичкам*❗️\n\n";
         text += "📍 *Место:* " + location + "\n\n";
         text += "Записаться⤵️";
 
@@ -1161,10 +1161,8 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
 
     private void saveMessageInfo(org.telegram.telegrambots.meta.api.objects.Message sentMessage, String text) {
         try {
-            if (messageCleanupService == null) {
-                System.out.println("⚠️ MessageCleanupService не инициализирован");
-                return;
-            }
+            log.info("💾 Сохранение сообщения ID: {}, текст: {}", sentMessage.getMessageId(),
+                    text.substring(0, Math.min(50, text.length())));
 
             String lessonType = "unknown";
             LocalDate lessonDate = LocalDate.now().plusDays(1); // по умолчанию завтра
@@ -1177,7 +1175,6 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
                     text.contains("вечерних") || text.contains("Вечерних")) {
                 lessonType = "evening";
             } else if (text.contains("занятий нет") || text.contains("Отдыхаем") || text.contains("отдыхаем")) {
-                // Это уведомление об отсутствии занятий - сохраняем как общее
                 lessonType = "no_classes";
             }
 
@@ -1188,10 +1185,13 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
                 lessonDate = LocalDate.now();
             }
 
+            log.info("📅 Сохранение: messageId={}, type={}, date={}",
+                    sentMessage.getMessageId(), lessonType, lessonDate);
+
             messageCleanupService.saveMessageId(sentMessage.getMessageId(), lessonType, lessonDate);
 
         } catch (Exception e) {
-            System.err.println("❌ Ошибка сохранения информации о сообщении: " + e.getMessage());
+            log.error("❌ Ошибка сохранения информации о сообщении", e);
         }
     }
 
