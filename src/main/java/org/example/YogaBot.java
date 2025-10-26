@@ -1209,43 +1209,43 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
             }
 
             String lessonType = "unknown";
-            LocalDate lessonDate = LocalDate.now().plusDays(1);
+            LocalDate lessonDate;
 
             // Логируем текст для отладки
             log.info("📝 Текст сообщения для анализа: {}", text.substring(0, Math.min(100, text.length())));
 
-            // Определяем тип занятия
-            if (text.contains("утренняя") || text.contains("Утренняя") || text.contains("🌅") ||
-                    text.contains("утренних") || text.contains("Утренних") || text.contains("Утренняя")) {
+            // ОПРЕДЕЛЕНИЕ ТИПА СООБЩЕНИЯ
+            if (text.contains("утренняя практика") || text.contains("Утренняя практика") ||
+                    (text.contains("🌅") && text.contains("практика")) ||
+                    (text.contains("утренних") && text.contains("занятий нет"))) {
                 lessonType = "morning";
                 log.info("🔍 Определен тип: morning");
-            } else if (text.contains("вечерняя") || text.contains("Вечерняя") || text.contains("🌇") ||
-                    text.contains("вечерних") || text.contains("Вечерних") || text.contains("Вечерняя")) {
+            } else if (text.contains("вечерняя практика") || text.contains("Вечерняя практика") ||
+                    (text.contains("🌇") && text.contains("практика")) ||
+                    (text.contains("вечерних") && text.contains("занятий нет"))) {
                 lessonType = "evening";
                 log.info("🔍 Определен тип: evening");
-            } else if (text.contains("занятий нет") || text.contains("Отдыхаем") || text.contains("отдыхаем") ||
-                    text.contains("нет занятий")) {
+            } else if (text.contains("занятий нет") || text.contains("Отдыхаем") ||
+                    text.contains("отдыхаем") || text.contains("нет занятий") ||
+                    (text.contains("Ура") && text.contains("занятий нет"))) {
                 lessonType = "no_classes";
                 log.info("🔍 Определен тип: no_classes");
             } else {
                 log.warn("⚠️ Не удалось определить тип занятия для текста: {}", text.substring(0, Math.min(50, text.length())));
+                lessonType = "unknown";
             }
 
-            // Определяем дату
-            if (text.contains("завтра") || text.contains("Завтра")) {
-                lessonDate = LocalDate.now().plusDays(1);
-                log.info("📅 Дата: завтра ({})", lessonDate);
-            } else if (text.contains("сегодня") || text.contains("Сегодня")) {
-                lessonDate = LocalDate.now();
-                log.info("📅 Дата: сегодня ({})", lessonDate);
-            } else {
-                log.info("📅 Дата по умолчанию: завтра ({})", lessonDate);
-            }
+            // ОПРЕДЕЛЕНИЕ ДАТЫ - ВСЕГДА ЗАВТРАШНИЙ ДЕНЬ для отбивок в 16:00
+            // Отбивки приходят сегодня в 16:00 о ЗАВТРАШНИХ занятиях
+            lessonDate = LocalDate.now().plusDays(1);
 
-            log.info("💾 Сохранение: messageId={}, type={}, date={}",
-                    sentMessage.getMessageId(), lessonType, lessonDate);
+            log.info("📅 Дата занятия установлена: {} (отбивка сегодня о завтрашнем дне)", lessonDate);
 
-            messageCleanupService.saveMessageId(sentMessage.getMessageId(), lessonType, lessonDate);
+            log.info("💾 Сохранение: messageId={}, type={}, date={}, text_preview={}",
+                    sentMessage.getMessageId(), lessonType, lessonDate,
+                    text.substring(0, Math.min(50, text.length())));
+
+            messageCleanupService.saveMessageId(sentMessage.getMessageId(), lessonType, lessonDate, text);
             log.info("✅ Сообщение успешно сохранено в БД");
 
         } catch (Exception e) {

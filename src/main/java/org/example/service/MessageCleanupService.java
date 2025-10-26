@@ -22,7 +22,7 @@ public class MessageCleanupService {
     private static final Logger log = LoggerFactory.getLogger(MessageCleanupService.class);
 
     private final JdbcTemplate jdbcTemplate;
-    private final TelegramService telegramService; // Используем TelegramService вместо YogaBot
+    private final TelegramService telegramService;
 
     @Value("${app.channelId:}")
     private String channelId;
@@ -35,6 +35,7 @@ public class MessageCleanupService {
     @PostConstruct
     public void init() {
         createMessagesTableIfNotExists();
+        log.info("✅ MessageCleanupService инициализирован. Канал: {}", channelId);
     }
 
     private void createMessagesTableIfNotExists() {
@@ -43,8 +44,9 @@ public class MessageCleanupService {
                 CREATE TABLE IF NOT EXISTS channel_messages (
                     id BIGSERIAL PRIMARY KEY,
                     message_id INTEGER NOT NULL,
-                    lesson_type VARCHAR(10) NOT NULL,
+                    lesson_type VARCHAR(20) NOT NULL,
                     lesson_date DATE NOT NULL,
+                    message_text TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(message_id, lesson_type, lesson_date)
                 )
@@ -55,14 +57,18 @@ public class MessageCleanupService {
         }
     }
 
-    public void saveMessageId(Integer messageId, String lessonType, LocalDate lessonDate) {
+    public void saveMessageId(Integer messageId, String lessonType, LocalDate lessonDate, String messageText) {
         try {
             jdbcTemplate.update("""
-                INSERT INTO channel_messages (message_id, lesson_type, lesson_date) 
-                VALUES (?, ?, ?)
-                ON CONFLICT (message_id, lesson_type, lesson_date) DO NOTHING
-            """, messageId, lessonType, lessonDate);
-            log.info("💾 Сохранен ID сообщения: {} для {} занятия на {}", messageId, lessonType, lessonDate);
+                INSERT INTO channel_messages (message_id, lesson_type, lesson_date, message_text) 
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT (message_id, lesson_type, lesson_date) DO UPDATE SET
+                    message_text = EXCLUDED.message_text,
+                    created_at = CURRENT_TIMESTAMP
+            """, messageId, lessonType, lessonDate, messageText);
+            log.info("💾 Сохранен ID сообщения: {} для {} занятия на {} (текст: {})",
+                    messageId, lessonType, lessonDate,
+                    messageText != null ? messageText.substring(0, Math.min(50, messageText.length())) + "..." : "null");
         } catch (Exception e) {
             log.error("❌ Ошибка сохранения ID сообщения", e);
         }
@@ -72,62 +78,65 @@ public class MessageCleanupService {
 
     public void testMorningDeletion() {
         log.info("🧪 РУЧНОЙ ТЕСТ: Удаление утренних сообщений");
-        deleteYesterdayMorningMessages();
+        deleteTodayMorningMessages();
     }
 
     public void testEveningDeletion() {
         log.info("🧪 РУЧНОЙ ТЕСТ: Удаление вечерних сообщений");
-        deleteYesterdayEveningMessages();
+        deleteTodayEveningMessages();
     }
 
     public void testNoClassesDeletion() {
         log.info("🧪 РУЧНОЙ ТЕСТ: Удаление сообщений об отсутствии занятий");
-        deleteYesterdayNoClassesMessages();
+        deleteTomorrowNoClassesMessages();
     }
 
-    // Удаление вчерашней утренней отбивки в 8:00 МСК
-    @Scheduled(cron = "0 0 8 * * ?")
-    public void deleteYesterdayMorningMessages() {
-        log.info("🔄 ЗАПУСК deleteYesterdayMorningMessages в {}", LocalDateTime.now());
+    // Удаление утренней отбивки в 8:00 утра в день занятия (спустя 16 часов после отбивки в 16:00)
+    @Scheduled(cron = "0 0 8 * * ?", zone = "Europe/Moscow")
+    public void deleteTodayMorningMessages() {
+        log.info("🔄 ЗАПУСК deleteTodayMorningMessages в {}", LocalDateTime.now());
 
         if (channelId == null || channelId.isEmpty()) {
             log.error("❌ Channel ID не настроен: {}", channelId);
             return;
         }
 
-        LocalDate yesterday = LocalDate.now().minusDays(1);
-        log.info("🗑️ Удаление утренних сообщений за вчера ({}) в 8:00 МСК", yesterday);
-        deleteMessagesForDateAndType(yesterday, "morning");
+        // Удаляем утренние сообщения на СЕГОДНЯШНИЙ день
+        LocalDate targetDate = LocalDate.now();
+        log.info("🗑️ Удаление утренних сообщений на сегодня ({}) в 8:00 МСК", targetDate);
+        deleteMessagesForDateAndType(targetDate, "morning");
     }
 
-    // Удаление вчерашней вечерней отбивки в 16:00 МСК
-    @Scheduled(cron = "0 0 16 * * ?")
-    public void deleteYesterdayEveningMessages() {
-        log.info("🔄 ЗАПУСК deleteYesterdayEveningMessages в {}", LocalDateTime.now());
+    // Удаление вечерней отбивки в 19:00 вечера в день занятия (спустя 27 часов после отбивки в 16:01)
+    @Scheduled(cron = "0 0 19 * * ?", zone = "Europe/Moscow")
+    public void deleteTodayEveningMessages() {
+        log.info("🔄 ЗАПУСК deleteTodayEveningMessages в {}", LocalDateTime.now());
 
         if (channelId == null || channelId.isEmpty()) {
             log.error("❌ Channel ID не настроен: {}", channelId);
             return;
         }
 
-        LocalDate yesterday = LocalDate.now().minusDays(1);
-        log.info("🗑️ Удаление вечерних сообщений за вчера ({}) в 16:00 МСК", yesterday);
-        deleteMessagesForDateAndType(yesterday, "evening");
+        // Удаляем вечерние сообщения на СЕГОДНЯШНИЙ день
+        LocalDate targetDate = LocalDate.now();
+        log.info("🗑️ Удаление вечерних сообщений на сегодня ({}) в 19:00 МСК", targetDate);
+        deleteMessagesForDateAndType(targetDate, "evening");
     }
 
-    // Удаление вчерашних уведомлений об отсутствии занятий в 17:00 МСК
-    @Scheduled(cron = "0 0 17 * * ?")
-    public void deleteYesterdayNoClassesMessages() {
-        log.info("🔄 ЗАПУСК deleteYesterdayNoClassesMessages в {}", LocalDateTime.now());
+    // Удаление отбивки об отсутствии занятий в 15:55 СЛЕДУЮЩЕГО дня
+    @Scheduled(cron = "0 55 15 * * ?", zone = "Europe/Moscow")
+    public void deleteTomorrowNoClassesMessages() {
+        log.info("🔄 ЗАПУСК deleteTomorrowNoClassesMessages в {}", LocalDateTime.now());
 
         if (channelId == null || channelId.isEmpty()) {
             log.error("❌ Channel ID не настроен: {}", channelId);
             return;
         }
 
-        LocalDate yesterday = LocalDate.now().minusDays(1);
-        log.info("🗑️ Удаление уведомлений об отсутствии занятий за вчера ({}) в 17:00 МСК", yesterday);
-        deleteMessagesForDateAndType(yesterday, "no_classes");
+        // Удаляем сообщения об отсутствии занятий на ЗАВТРАШНИЙ день
+        LocalDate targetDate = LocalDate.now().plusDays(1);
+        log.info("🗑️ Удаление сообщений об отсутствии занятий на завтра ({}) в 15:55 МСК", targetDate);
+        deleteMessagesForDateAndType(targetDate, "no_classes");
     }
 
     public void deleteMessagesForDateAndType(LocalDate date, String lessonType) {
@@ -135,7 +144,7 @@ public class MessageCleanupService {
             log.info("🔍 Поиск сообщений для удаления: date={}, type={}", date, lessonType);
 
             List<Map<String, Object>> messages = jdbcTemplate.queryForList("""
-                SELECT message_id FROM channel_messages 
+                SELECT message_id, message_text FROM channel_messages 
                 WHERE lesson_date = ? AND lesson_type = ?
             """, date, lessonType);
 
@@ -149,10 +158,17 @@ public class MessageCleanupService {
             int deletedCount = 0;
             for (Map<String, Object> message : messages) {
                 Integer messageId = (Integer) message.get("message_id");
+                String messageText = (String) message.get("message_text");
+
+                log.info("🔍 Удаление сообщения {}: {}", messageId,
+                        messageText != null ? messageText.substring(0, Math.min(100, messageText.length())) : "null");
+
                 if (deleteMessageFromChannel(messageId)) {
                     deletedCount++;
+                    // Удаляем запись из БД после успешного удаления из канала
                     jdbcTemplate.update("DELETE FROM channel_messages WHERE message_id = ? AND lesson_date = ? AND lesson_type = ?",
                             messageId, date, lessonType);
+                    log.info("✅ Сообщение {} удалено из БД", messageId);
                 }
             }
 
@@ -182,7 +198,7 @@ public class MessageCleanupService {
     }
 
     // Очистка старых записей из БД (старше 7 дней)
-    @Scheduled(cron = "0 0 2 * * ?")
+    @Scheduled(cron = "0 0 2 * * ?", zone = "Europe/Moscow")
     public void cleanupOldRecords() {
         try {
             LocalDate weekAgo = LocalDate.now().minusDays(7);
@@ -193,5 +209,31 @@ public class MessageCleanupService {
         } catch (Exception e) {
             log.error("❌ Ошибка очистки старых записей", e);
         }
+    }
+
+    // Отладочный метод для проверки состояния сообщений
+    @Scheduled(fixedRate = 300000) // Каждые 5 минут
+    public void debugScheduledTasks() {
+        LocalDateTime now = LocalDateTime.now();
+        log.info("🕒 Текущее время МСК: {}, Сегодня: {}, Завтра: {}",
+                now.format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")),
+                LocalDate.now(),
+                LocalDate.now().plusDays(1));
+
+        try {
+            List<Map<String, Object>> messages = jdbcTemplate.queryForList(
+                    "SELECT message_id, lesson_type, lesson_date, created_at FROM channel_messages ORDER BY lesson_date DESC, lesson_type LIMIT 5");
+            log.info("📋 Последние 5 сообщений в БД: {}", messages);
+        } catch (Exception e) {
+            log.error("❌ Ошибка получения отладочной информации", e);
+        }
+    }
+
+    // Метод для удаления ВСЕХ сообщений на определенную дату (для тестирования)
+    public void deleteAllMessagesForDate(LocalDate date) {
+        log.info("🧹 Принудительное удаление ВСЕХ сообщений на дату: {}", date);
+        deleteMessagesForDateAndType(date, "morning");
+        deleteMessagesForDateAndType(date, "evening");
+        deleteMessagesForDateAndType(date, "no_classes");
     }
 }

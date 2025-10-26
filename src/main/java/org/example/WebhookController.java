@@ -9,6 +9,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -340,6 +341,109 @@ public class WebhookController {
             """);
         } catch (Exception e) {
             return ResponseEntity.status(500).body("❌ Ошибка: " + e.getMessage());
+        }
+    }
+
+    // Добавить в класс WebhookController
+    @GetMapping("/debug/messages-full")
+    public ResponseEntity<List<Map<String, Object>>> debugMessagesFull() {
+        try {
+            List<Map<String, Object>> messages = jdbcTemplate.queryForList("""
+            SELECT message_id, lesson_type, lesson_date, message_text, created_at 
+            FROM channel_messages 
+            ORDER BY lesson_date DESC, lesson_type
+            LIMIT 20
+        """);
+            return ResponseEntity.ok(messages);
+        } catch (Exception e) {
+            System.err.println("❌ Ошибка получения сообщений: " + e.getMessage());
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    @GetMapping("/force-cleanup")
+    public ResponseEntity<String> forceCleanup() {
+        try {
+            LocalDate today = LocalDate.now();
+            LocalDate tomorrow = LocalDate.now().plusDays(1);
+
+            messageCleanupService.deleteMessagesForDateAndType(today, "morning");
+            messageCleanupService.deleteMessagesForDateAndType(today, "evening");
+            messageCleanupService.deleteMessagesForDateAndType(today, "no_classes");
+            messageCleanupService.deleteMessagesForDateAndType(tomorrow, "morning");
+            messageCleanupService.deleteMessagesForDateAndType(tomorrow, "evening");
+
+            return ResponseEntity.ok("""
+            ✅ Принудительная очистка запущена!
+            
+            Проверяются даты:
+            • Сегодня ({}) - утро, вечер, нет занятий
+            • Завтра ({}) - утро, вечер
+            
+            Проверьте логи для деталей.
+            """.formatted(today, tomorrow));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("❌ Ошибка принудительной очистки: " + e.getMessage());
+        }
+    }
+
+    // Добавить в класс WebhookController
+    @GetMapping("/debug/cleanup-schedule")
+    public ResponseEntity<Map<String, String>> debugCleanupSchedule() {
+        Map<String, String> schedule = new HashMap<>();
+
+        schedule.put("current_time", LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")));
+        schedule.put("current_date", LocalDate.now().toString());
+        schedule.put("tomorrow_date", LocalDate.now().plusDays(1).toString());
+
+        schedule.put("morning_cleanup", "08:00 МСК - удаление утренних отбивок (спустя 16 часов)");
+        schedule.put("evening_cleanup", "19:00 МСК - удаление вечерних отбивок (спустя 27 часов)");
+        schedule.put("no_classes_cleanup", "15:55 МСК следующего дня - удаление отбивок об отсутствии");
+
+        schedule.put("notification_time", "16:00 МСК - отправка уведомлений о завтрашних занятиях");
+
+        return ResponseEntity.ok(schedule);
+    }
+
+    @GetMapping("/cleanup-today")
+    public ResponseEntity<String> cleanupToday() {
+        try {
+            LocalDate today = LocalDate.now();
+            messageCleanupService.deleteAllMessagesForDate(today);
+
+            return ResponseEntity.ok("""
+            ✅ Очистка сообщений на сегодня ({}) запущена!
+            
+            Удаляются:
+            • Утренние отбивки
+            • Вечерние отбивки  
+            • Сообщения об отсутствии занятий
+            
+            Проверьте логи для деталей.
+            """.formatted(today));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("❌ Ошибка очистки: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/cleanup-tomorrow")
+    public ResponseEntity<String> cleanupTomorrow() {
+        try {
+            LocalDate tomorrow = LocalDate.now().plusDays(1);
+            messageCleanupService.deleteAllMessagesForDate(tomorrow);
+
+            return ResponseEntity.ok("""
+            ✅ Очистка сообщений на завтра ({}) запущена!
+            
+            Удаляются:
+            • Утренние отбивки
+            • Вечерние отбивки  
+            • Сообщения об отсутствии занятий
+            
+            Проверьте логи для деталей.
+            """.formatted(tomorrow));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("❌ Ошибка очистки: " + e.getMessage());
         }
     }
 }
