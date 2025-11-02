@@ -379,17 +379,110 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
         }
     }
 
+    private void enableNotifications(Long chatId) {
+        try {
+            System.out.println("🔄 Включение уведомлений...");
+            boolean success = supabaseService.forceEnableNotifications();
+            String status = supabaseService.getNotificationsStatus();
+
+            if (success) {
+                String text = """
+                ✅ Уведомления ВКЛЮЧЕНЫ!
+                
+                Текущий статус: %s
+                
+                Автоматические отбивки будут отправляться:
+                • 🌅 Утренние - в 16:00 МСК
+                • 🌇 Вечерние - в 16:01 МСК  
+                • 📝 Нет занятий - в 16:05 МСК
+                
+                Следующая отправка: завтра в 16:00 МСК
+                """.formatted(status);
+                sendMsg(chatId, text);
+            } else {
+                sendMsg(chatId, "❌ Ошибка включения уведомлений. Проверьте логи.");
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Ошибка включения уведомлений: " + e.getMessage());
+            sendMsg(chatId, "❌ Ошибка включения уведомлений: " + e.getMessage());
+        }
+    }
+
+    private void disableNotifications(Long chatId) {
+        try {
+            System.out.println("🔄 Выключение уведомлений...");
+            boolean success = supabaseService.forceDisableNotifications();
+            String status = supabaseService.getNotificationsStatus();
+
+            if (success) {
+                String text = """
+                ✅ Уведомления ВЫКЛЮЧЕНЫ!
+                
+                Текущий статус: %s
+                
+                Автоматические отбивки НЕ будут отправляться.
+                Вы можете отправлять уведомления вручную через:
+                • "🔔 Отбивка на сегодня"
+                • "🔔 Отбивка на завтра"
+                """.formatted(status);
+                sendMsg(chatId, text);
+            } else {
+                sendMsg(chatId, "❌ Ошибка выключения уведомлений. Проверьте логи.");
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Ошибка выключения уведомлений: " + e.getMessage());
+            sendMsg(chatId, "❌ Ошибка выключения уведомлений: " + e.getMessage());
+        }
+    }
+
+    private void showNotificationsStatus(Long chatId) {
+        try {
+            String status = supabaseService.getNotificationsStatus();
+            boolean enabled = supabaseService.areNotificationsEnabled();
+
+            String nextNotification = enabled ?
+                    "Следующая отправка: завтра в 16:00 МСК" :
+                    "Уведомления отключены - используйте кнопки для ручной отправки";
+
+            String text = """
+            📊 Статус уведомлений:
+            
+            Состояние: %s
+            %s
+            
+            Управление:
+            • 🔔 Включить уведомления - автоматическая отправка
+            • 🔕 Выключить уведомления - остановить автоматическую отправку
+            • 🔔 Отбивка на сегодня/завтра - ручная отправка
+            """.formatted(status, nextNotification);
+
+            sendMsg(chatId, text);
+        } catch (Exception e) {
+            System.err.println("❌ Ошибка получения статуса уведомлений: " + e.getMessage());
+            sendMsg(chatId, "❌ Ошибка получения статуса уведомлений");
+        }
+    }
+
     private void handleAdminMessage(Long chatId, String text, Long userId) {
         System.out.println("👨‍💼 Обработка админской команды: " + text);
 
         switch (text) {
             case "📅 Расписание" -> {
-                System.out.println("📅 Админ запросил меню расписания - ВЫЗЫВАЕМ showScheduleMenu");
+                System.out.println("📅 Админ запросил меню расписания");
                 showScheduleMenu(chatId);
             }
-            case "🔔 Уведомления" -> {
-                System.out.println("🔔 Админ переключает уведомления");
-                toggleNotifications(chatId);
+            // ЗАМЕНЯЕМ старую кнопку на две новые
+            case "🔔 Включить уведомления" -> {
+                System.out.println("🔔 Админ включает уведомления");
+                enableNotifications(chatId);
+            }
+            case "🔕 Выключить уведомления" -> {
+                System.out.println("🔕 Админ выключает уведомления");
+                disableNotifications(chatId);
+            }
+            case "📊 Статус уведомлений" -> {
+                System.out.println("📊 Админ запрашивает статус уведомлений");
+                showNotificationsStatus(chatId);
             }
             case "📋 Записи на сегодня" -> {
                 System.out.println("📋 Админ запросил записи на сегодня");
@@ -476,20 +569,26 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
         if (isAdminUser) {
             System.out.println("👨‍💼 Создаем админские кнопки для пользователя");
 
+            // ЗАМЕНЯЕМ одну кнопку на две отдельные
             KeyboardRow adminRow1 = new KeyboardRow();
-            adminRow1.add("🔔 Уведомления");
+            adminRow1.add("🔔 Включить уведомления");
+            adminRow1.add("🔕 Выключить уведомления");
 
             KeyboardRow adminRow2 = new KeyboardRow();
+            adminRow2.add("📊 Статус уведомлений");
             adminRow2.add("📋 Записи на сегодня");
-            adminRow2.add("📋 Записи на завтра");
 
             KeyboardRow adminRow3 = new KeyboardRow();
+            adminRow3.add("📋 Записи на завтра");
             adminRow3.add("🔔 Отбивка на сегодня");
-            adminRow3.add("🔔 Отбивка на завтра");
+
+            KeyboardRow adminRow4 = new KeyboardRow();
+            adminRow4.add("🔔 Отбивка на завтра");
 
             keyboard.add(adminRow1);
             keyboard.add(adminRow2);
             keyboard.add(adminRow3);
+            keyboard.add(adminRow4);
         }
 
         keyboardMarkup.setKeyboard(keyboard);

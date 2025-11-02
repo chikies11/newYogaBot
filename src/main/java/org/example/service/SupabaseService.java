@@ -448,6 +448,46 @@ public class SupabaseService {
         }
     }
 
+    public boolean forceEnableNotifications() {
+        return setNotificationsState(true);
+    }
+
+    public boolean forceDisableNotifications() {
+        return setNotificationsState(false);
+    }
+
+    private boolean setNotificationsState(boolean enabled) {
+        try {
+            String url = supabaseUrl + "/rest/v1/bot_settings?on_conflict=id";
+
+            Map<String, Object> data = Map.of(
+                    "id", 1,
+                    "notifications_enabled", enabled,
+                    "updated_at", java.time.OffsetDateTime.now().toString()
+            );
+
+            webClient.post()
+                    .uri(url)
+                    .header("Prefer", "resolution=merge-duplicates")
+                    .bodyValue(data)
+                    .retrieve()
+                    .bodyToMono(Void.class)
+                    .block();
+
+            log.info("✅ Уведомления {} {}", enabled ? "ВКЛЮЧЕНЫ" : "ВЫКЛЮЧЕНЫ", enabled ? "✅" : "❌");
+            return true;
+
+        } catch (Exception e) {
+            log.error("❌ Ошибка установки состояния уведомлений: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    public String getNotificationsStatus() {
+        boolean enabled = areNotificationsEnabled();
+        return enabled ? "ВКЛЮЧЕНЫ ✅" : "ВЫКЛЮЧЕНЫ ❌";
+    }
+
     public void initializeDatabase() {
         try {
             // Таблица lessons будет создана автоматически при первом запросе
