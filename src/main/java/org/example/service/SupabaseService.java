@@ -433,27 +433,20 @@ public class SupabaseService {
                     "updated_at", OffsetDateTime.now().toString()
             );
 
-            String response = webClient.post()
+            // Используем Void.class вместо String.class для игнорирования ответа
+            webClient.post()
                     .uri(url)
                     .header("Prefer", "resolution=merge-duplicates")
                     .bodyValue(data)
                     .retrieve()
-                    .bodyToMono(String.class)
-                    .onErrorReturn("ERROR")
+                    .bodyToMono(Void.class) // Игнорируем ответ
                     .block();
 
-            boolean success = response != null && !response.contains("error");
-
-            if (success) {
-                log.info("✅ Уведомления {} {}", enabled ? "ВКЛЮЧЕНЫ" : "ВЫКЛЮЧЕНЫ");
-            } else {
-                log.error("❌ Ошибка установки состояния уведомлений. Ответ: {}", response);
-            }
-
-            return success;
+            log.info("✅ Уведомления {} (запрос отправлен в Supabase)", enabled ? "ВЫКЛЮЧЕНЫ 🔕" : "ВКЛЮЧЕНЫ 🔔");
+            return true;
 
         } catch (Exception e) {
-            log.error("❌ Критическая ошибка установки состояния уведомлений: {}", e.getMessage());
+            log.error("❌ Ошибка установки состояния уведомлений: {}", e.getMessage());
             return false;
         }
     }
@@ -469,29 +462,24 @@ public class SupabaseService {
                     .uri(url)
                     .retrieve()
                     .bodyToMono(String.class)
-                    .onErrorReturn("[]")
+                    .onErrorReturn("[]") // При ошибке возвращаем пустой массив
                     .block();
-
-            log.info("🔍 Ответ от Supabase: {}", response);
 
             if (response != null && response.startsWith("[") && response.length() > 2) {
                 JsonNode jsonNode = objectMapper.readTree(response);
                 if (jsonNode.isArray() && jsonNode.size() > 0) {
                     boolean enabled = jsonNode.get(0).get("notifications_enabled").asBoolean();
-                    log.info("✅ Статус уведомлений из БД: {}", enabled);
+                    log.info("✅ Статус уведомлений из БД: {}", enabled ? "ВКЛ" : "ВЫКЛ");
                     return enabled;
                 }
             }
 
-            // Если записи нет - создаем её
-            log.info("📝 Запись не найдена, создаем новую с уведомлениями ВКЛ");
-            setNotificationsState(true);
-            return true;
+            log.info("📝 Запись не найдена, считаем уведомления ВКЛЮЧЕННЫМИ по умолчанию");
+            return true; // Значение по умолчанию
 
         } catch (Exception e) {
             log.error("❌ Ошибка проверки настроек уведомлений: {}", e.getMessage());
-            // Возвращаем true по умолчанию
-            return true;
+            return true; // Значение по умолчанию при ошибке
         }
     }
 

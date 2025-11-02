@@ -412,7 +412,12 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
         try {
             System.out.println("🔄 Выключение уведомлений...");
             boolean success = supabaseService.forceDisableNotifications();
+
+            // Принудительно получаем актуальный статус
+            boolean currentStatus = supabaseService.areNotificationsEnabled();
             String status = supabaseService.getNotificationsStatus();
+
+            System.out.println("🔕 Результат выключения: success=" + success + ", currentStatus=" + currentStatus);
 
             if (success) {
                 String text = """
@@ -427,7 +432,7 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
                 """.formatted(status);
                 sendMsg(chatId, text);
             } else {
-                sendMsg(chatId, "❌ Ошибка выключения уведомлений. Проверьте логи.");
+                sendMsg(chatId, "❌ Ошибка выключения уведомлений. Текущий статус: " + status);
             }
         } catch (Exception e) {
             System.err.println("❌ Ошибка выключения уведомлений: " + e.getMessage());
