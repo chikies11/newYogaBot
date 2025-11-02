@@ -3,8 +3,8 @@ package org.example;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.telegram.telegrambots.meta.api.objects.Update;
-import org.example.service.DatabaseService;
 import org.example.service.MessageCleanupService;
+import org.example.service.SupabaseService;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.time.LocalDate;
@@ -20,17 +20,17 @@ public class WebhookController {
 
     private final YogaBot bot;
     private final PingService pingService;
-    private final DatabaseService databaseService;
+    private final SupabaseService supabaseService;
     private final MessageCleanupService messageCleanupService;
     private final JdbcTemplate jdbcTemplate;
 
     public WebhookController(YogaBot bot, PingService pingService,
-                             DatabaseService databaseService,
+                             SupabaseService supabaseService,
                              MessageCleanupService messageCleanupService,
                              JdbcTemplate jdbcTemplate) {
         this.bot = bot;
         this.pingService = pingService;
-        this.databaseService = databaseService;
+        this.supabaseService = supabaseService;
         this.messageCleanupService = messageCleanupService;
         this.jdbcTemplate = jdbcTemplate;
     }
@@ -163,16 +163,14 @@ public class WebhookController {
     @GetMapping("/reinit-db")
     public ResponseEntity<String> reinitDatabase() {
         try {
-            // Принудительно пересоздаем таблицы
-            databaseService.createTablesIfNotExists();
-            databaseService.initializeDefaultSchedule();
+            // Принудительно пересоздаем таблицы через SupabaseService
+            supabaseService.initializeDatabase();
 
             return ResponseEntity.ok("""
                 ✅ База данных переинициализирована!
                 
                 Выполнено:
-                • Создание таблиц
-                • Инициализация расписания
+                • Инициализация расписания в Supabase
                 """);
         } catch (Exception e) {
             return ResponseEntity.status(500).body("❌ Ошибка переинициализации БД: " + e.getMessage());
@@ -254,10 +252,10 @@ public class WebhookController {
         try {
             Map<String, Object> debugInfo = new HashMap<>();
 
-            // Проверяем таблицу lessons
+            // Проверяем таблицу lessons через Supabase API
             try {
-                List<Map<String, Object>> lessons = jdbcTemplate.queryForList("SELECT COUNT(*) as count FROM lessons");
-                debugInfo.put("lessons_count", lessons.get(0).get("count"));
+                // Здесь можно добавить проверку через SupabaseService если нужно
+                debugInfo.put("lessons_count", "Проверьте через Supabase Dashboard");
             } catch (Exception e) {
                 debugInfo.put("lessons_count", "Таблица не существует");
             }
@@ -403,47 +401,5 @@ public class WebhookController {
         schedule.put("notification_time", "16:00 МСК - отправка уведомлений о завтрашних занятиях");
 
         return ResponseEntity.ok(schedule);
-    }
-
-    @GetMapping("/cleanup-today")
-    public ResponseEntity<String> cleanupToday() {
-        try {
-            LocalDate today = LocalDate.now();
-            messageCleanupService.deleteAllMessagesForDate(today);
-
-            return ResponseEntity.ok("""
-            ✅ Очистка сообщений на сегодня ({}) запущена!
-            
-            Удаляются:
-            • Утренние отбивки
-            • Вечерние отбивки  
-            • Сообщения об отсутствии занятий
-            
-            Проверьте логи для деталей.
-            """.formatted(today));
-        } catch (Exception e) {
-            return ResponseEntity.status(500).body("❌ Ошибка очистки: " + e.getMessage());
-        }
-    }
-
-    @GetMapping("/cleanup-tomorrow")
-    public ResponseEntity<String> cleanupTomorrow() {
-        try {
-            LocalDate tomorrow = LocalDate.now().plusDays(1);
-            messageCleanupService.deleteAllMessagesForDate(tomorrow);
-
-            return ResponseEntity.ok("""
-            ✅ Очистка сообщений на завтра ({}) запущена!
-            
-            Удаляются:
-            • Утренние отбивки
-            • Вечерние отбивки  
-            • Сообщения об отсутствии занятий
-            
-            Проверьте логи для деталей.
-            """.formatted(tomorrow));
-        } catch (Exception e) {
-            return ResponseEntity.status(500).body("❌ Ошибка очистки: " + e.getMessage());
-        }
     }
 }

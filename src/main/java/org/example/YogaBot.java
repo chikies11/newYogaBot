@@ -1,11 +1,10 @@
 package org.example;
 
-import org.example.service.DatabaseService;
 import org.example.service.MessageCleanupService;
+import org.example.service.SupabaseService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.example.service.MessageSender;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
@@ -51,14 +50,14 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
         return execute(deleteMessage);
     }
 
-    private final DatabaseService databaseService;
+    private final SupabaseService supabaseService;
     private final Map<Long, String> userStates = new HashMap<>();
     private final Map<DayOfWeek, Map<String, String>> fixedSchedule = new HashMap<>();
     private final MessageCleanupService messageCleanupService;
 
-    public YogaBot(DatabaseService databaseService,
-                   @Lazy MessageCleanupService messageCleanupService) { // Добавляем @Lazy
-        this.databaseService = databaseService;
+    public YogaBot(SupabaseService supabaseService,
+                   @Lazy MessageCleanupService messageCleanupService) {
+        this.supabaseService = supabaseService;
         this.messageCleanupService = messageCleanupService;
     }
 
@@ -77,8 +76,8 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
             }
         }
 
-        // Принудительная инициализация БД
-        databaseService.initializeDatabase();
+        // Принудительная инициализация БД через SupabaseService
+        supabaseService.initializeDatabase();
 
         initializeFixedSchedule();
         System.out.println("✅ YogaBot инициализирован");
@@ -88,10 +87,10 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
         System.out.println("🔄 Инициализация расписания...");
 
         // Сначала инициализируем дефолтное расписание в БД
-        databaseService.initializeDefaultSchedule();
+        supabaseService.initializeDefaultSchedule();
 
         // Затем загружаем из БД
-        Map<DayOfWeek, Map<String, String>> savedSchedule = databaseService.loadSchedule();
+        Map<DayOfWeek, Map<String, String>> savedSchedule = supabaseService.loadSchedule();
 
         System.out.println("📊 Результат загрузки из БД: " + (savedSchedule != null ? savedSchedule.size() : "null") + " дней");
 
@@ -339,7 +338,7 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
 
     private void showRegistrationsForDate(Long chatId, LocalDate date) {
         try {
-            Map<String, List<String>> registrations = databaseService.getRegistrationsForDate(date);
+            Map<String, List<String>> registrations = supabaseService.getRegistrationsForDate(date);
 
             StringBuilder sb = new StringBuilder();
             sb.append("📋 *Записи на ").append(date.format(DateTimeFormatter.ofPattern("dd.MM"))).append("*\n\n");
@@ -745,7 +744,7 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
         fixedSchedule.get(dayOfWeek).put(lessonType, deletedSchedule);
 
         // СОХРАНЯЕМ ИЗМЕНЕНИЕ В БАЗУ ДАННЫХ
-        databaseService.saveSchedule(dayOfWeek, lessonType, deletedSchedule, chatId);
+        supabaseService.saveSchedule(dayOfWeek, lessonType, deletedSchedule, chatId);
 
         String text = "✅ *" + typeText + " занятие на " + dayName + " удалено!*\n\n";
         text += "Теперь в расписании указано: *Отдых*";
@@ -798,7 +797,7 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
         fixedSchedule.get(dayOfWeek).put(lessonType, newSchedule);
 
         // СОХРАНЯЕМ В БАЗУ ДАННЫХ с логированием
-        databaseService.saveSchedule(dayOfWeek, lessonType, newSchedule, chatId);
+        supabaseService.saveSchedule(dayOfWeek, lessonType, newSchedule, chatId);
 
         String text = "✅ *" + typeText + " занятие на " + dayName + " обновлено!*\n\n";
         text += "📝 *Новое расписание:*\n" + newSchedule + "\n\n";
@@ -849,7 +848,7 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
     }
 
     private void toggleNotifications(Long chatId) {
-        boolean newState = databaseService.toggleNotifications();
+        boolean newState = supabaseService.toggleNotifications();
 
         String text = newState ?
                 "🔔 *Уведомления включены!*\n\nАвтоматические уведомления будут отправляться в канал:\n• Утренние - в 16:00 МСК\n• Вечерние - в 16:01 МСК\n• Отсутствие занятий - в 16:05 МСК" :
@@ -877,7 +876,7 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
         LocalDate today = getMoscowDate();
         System.out.println("🔍 Запрос записей на сегодня: " + today);
 
-        Map<String, List<String>> registrations = databaseService.getRegistrationsForDate(today);
+        Map<String, List<String>> registrations = supabaseService.getRegistrationsForDate(today);
         System.out.println("🔍 Найдено записей: утро=" + registrations.get("morning").size() + ", вечер=" + registrations.get("evening").size());
 
         StringBuilder sb = new StringBuilder();
@@ -1284,7 +1283,7 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
             return;
         }
 
-        boolean success = databaseService.registerUser(userId, username, displayName, lessonDate, lessonType);
+        boolean success = supabaseService.registerUser(userId, username, displayName, lessonDate, lessonType);
 
         String answer = success ?
                 "✅ Вы записаны на " + (lessonType.equals("morning") ? "утреннюю" : "вечернюю") + " практику!" :
@@ -1320,7 +1319,7 @@ public class YogaBot extends TelegramWebhookBot implements MessageSender {
             return;
         }
 
-        boolean success = databaseService.cancelRegistration(userId, lessonDate, lessonType);
+        boolean success = supabaseService.cancelRegistration(userId, lessonDate, lessonType);
 
         String answer = success ?
                 "❌ Запись на " + (lessonType.equals("morning") ? "утреннюю" : "вечернюю") + " практику отменена!" :

@@ -21,7 +21,8 @@ ENV TZ=Europe/Moscow
 RUN addgroup -S spring && adduser -S spring -G spring
 USER spring
 
-COPY --from=builder /app/target/*.jar app.jar
+# ИСПРАВЛЕНО: правильный путь к JAR файлу
+COPY --from=builder /app/target/YogaBot-1.0-SNAPSHOT.jar app.jar
 
 EXPOSE 8080
 
