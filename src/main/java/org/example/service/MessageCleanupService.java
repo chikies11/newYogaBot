@@ -45,7 +45,7 @@ public class MessageCleanupService {
 
     public void testNoClassesDeletion() {
         log.info("🧪 РУЧНОЙ ТЕСТ: Удаление сообщений об отсутствии занятий");
-        deleteTomorrowNoClassesMessages();
+        deleteTodayNoClassesMessages();
     }
 
     // Удаление утренней отбивки в 8:00 утра в день занятия (спустя 16 часов после отбивки в 16:00)
@@ -82,17 +82,17 @@ public class MessageCleanupService {
 
     // Удаление отбивки об отсутствии занятий в 15:55 СЛЕДУЮЩЕГО дня
     @Scheduled(cron = "0 55 15 * * ?", zone = "Europe/Moscow")
-    public void deleteTomorrowNoClassesMessages() {
-        log.info("🔄 ЗАПУСК deleteTomorrowNoClassesMessages в {}", LocalDateTime.now());
+    public void deleteTodayNoClassesMessages() {
+        log.info("🔄 ЗАПУСК deleteTodayNoClassesMessages в {}", LocalDateTime.now());
 
         if (channelId == null || channelId.isEmpty()) {
             log.error("❌ Channel ID не настроен: {}", channelId);
             return;
         }
 
-        // Удаляем сообщения об отсутствии занятий на ЗАВТРАШНИЙ день
-        LocalDate targetDate = LocalDate.now().plusDays(1);
-        log.info("🗑️ Удаление сообщений об отсутствии занятий на завтра ({}) в 15:55 МСК", targetDate);
+        // Удаляем сообщения об отсутствии занятий на СЕГОДНЯШНИЙ день
+        LocalDate targetDate = LocalDate.now();
+        log.info("🗑️ Удаление сообщений об отсутствии занятий на сегодня ({}) в 15:55 МСК", targetDate);
         deleteMessagesForDateAndType(targetDate, "no_classes");
     }
 
