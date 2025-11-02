@@ -13,6 +13,7 @@ import reactor.core.publisher.Mono;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.*;
 
 @Service
@@ -52,78 +53,6 @@ public class SupabaseService {
                 .build();
 
         log.info("✅ SupabaseService инициализирован с URL: {}", supabaseUrl);
-    }
-
-    // Упрощенный метод для установки состояния уведомлений
-    private boolean setNotificationsState(boolean enabled) {
-        try {
-            log.info("🔄 Установка состояния уведомлений: {}", enabled);
-
-            String url = supabaseUrl + "/rest/v1/bot_settings?on_conflict=id";
-
-            Map<String, Object> data = Map.of(
-                    "id", 1,
-                    "notifications_enabled", enabled,
-                    "updated_at", java.time.OffsetDateTime.now().toString()
-            );
-
-            String response = webClient.post()
-                    .uri(url)
-                    .header("Prefer", "resolution=merge-duplicates")
-                    .bodyValue(data)
-                    .retrieve()
-                    .bodyToMono(String.class)
-                    .onErrorReturn("ERROR") // Обработка ошибок
-                    .block();
-
-            boolean success = response != null && !response.contains("error");
-
-            if (success) {
-                log.info("✅ Уведомления {} {}", enabled ? "ВКЛЮЧЕНЫ" : "ВЫКЛЮЧЕНЫ");
-            } else {
-                log.error("❌ Ошибка установки состояния уведомлений. Ответ: {}", response);
-            }
-
-            return success;
-
-        } catch (Exception e) {
-            log.error("❌ Критическая ошибка установки состояния уведомлений: {}", e.getMessage());
-            return false;
-        }
-    }
-
-    public boolean areNotificationsEnabled() {
-        try {
-            String url = supabaseUrl + "/rest/v1/bot_settings?id=eq.1&select=notifications_enabled";
-
-            String response = webClient.get()
-                    .uri(url)
-                    .retrieve()
-                    .bodyToMono(String.class)
-                    .onErrorReturn("[]") // При ошибке возвращаем пустой массив
-                    .block();
-
-            log.info("🔍 Ответ от Supabase: {}", response);
-
-            if (response != null && response.startsWith("[") && response.length() > 2) {
-                JsonNode jsonNode = objectMapper.readTree(response);
-                if (jsonNode.isArray() && jsonNode.size() > 0) {
-                    boolean enabled = jsonNode.get(0).get("notifications_enabled").asBoolean();
-                    log.info("✅ Статус уведомлений из БД: {}", enabled);
-                    return enabled;
-                }
-            }
-
-            // Если записи нет - создаем её
-            log.info("📝 Запись не найдена, создаем новую с уведомлениями ВКЛ");
-            setNotificationsState(true);
-            return true;
-
-        } catch (Exception e) {
-            log.error("❌ Ошибка проверки настроек уведомлений: {}", e.getMessage());
-            // Возвращаем true по умолчанию
-            return true;
-        }
     }
 
     // === МЕТОДЫ ДЛЯ РАБОТЫ С РАСПИСАНИЕМ ===
@@ -446,74 +375,147 @@ public class SupabaseService {
         }
     }
 
-    // === МЕТОДЫ ДЛЯ НАСТРОЕК ==
+    // === МЕТОДЫ ДЛЯ УПРАВЛЕНИЯ УВЕДОМЛЕНИЯМИ ===
 
-    private void initializeBotSettings() {
+    /**
+     * Инициализация базы данных
+     */
+    public void initializeDatabase() {
         try {
-            String url = supabaseUrl + "/rest/v1/bot_settings";
-
-            Map<String, Object> data = new HashMap<>();
-            data.put("id", 1);
-            data.put("notifications_enabled", true);
-
-            webClient.post()
-                    .uri(url)
-                    .header("Prefer", "return=representation")
-                    .bodyValue(data)
-                    .retrieve()
-                    .bodyToMono(String.class)
-                    .block();
-
-            log.info("✅ Настройки бота инициализированы");
+            log.info("🔄 Инициализация базы данных Supabase...");
+            // Проверяем и создаем таблицы если нужно
+            initializeDefaultSchedule();
+            log.info("✅ База данных Supabase инициализирована");
         } catch (Exception e) {
-            log.error("❌ Ошибка инициализации настроек бота", e);
+            log.error("❌ Ошибка инициализации базы данных Supabase", e);
         }
     }
 
+    /**
+     * Получение статуса уведомлений в текстовом формате
+     */
+    public String getNotificationsStatus() {
+        try {
+            boolean enabled = areNotificationsEnabled();
+            return enabled ? "ВКЛЮЧЕНЫ ✅" : "ВЫКЛЮЧЕНЫ ❌";
+        } catch (Exception e) {
+            log.error("❌ Ошибка получения статуса уведомлений", e);
+            return "ОШИБКА ❌";
+        }
+    }
+
+    /**
+     * Принудительное включение уведомлений
+     */
+    public boolean forceEnableNotifications() {
+        return setNotificationsState(true);
+    }
+
+    /**
+     * Принудительное выключение уведомлений
+     */
+    public boolean forceDisableNotifications() {
+        return setNotificationsState(false);
+    }
+
+    /**
+     * Установка состояния уведомлений
+     */
+    private boolean setNotificationsState(boolean enabled) {
+        try {
+            log.info("🔄 Установка состояния уведомлений: {}", enabled);
+
+            String url = supabaseUrl + "/rest/v1/bot_settings?on_conflict=id";
+
+            Map<String, Object> data = Map.of(
+                    "id", 1,
+                    "notifications_enabled", enabled,
+                    "updated_at", OffsetDateTime.now().toString()
+            );
+
+            String response = webClient.post()
+                    .uri(url)
+                    .header("Prefer", "resolution=merge-duplicates")
+                    .bodyValue(data)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .onErrorReturn("ERROR")
+                    .block();
+
+            boolean success = response != null && !response.contains("error");
+
+            if (success) {
+                log.info("✅ Уведомления {} {}", enabled ? "ВКЛЮЧЕНЫ" : "ВЫКЛЮЧЕНЫ");
+            } else {
+                log.error("❌ Ошибка установки состояния уведомлений. Ответ: {}", response);
+            }
+
+            return success;
+
+        } catch (Exception e) {
+            log.error("❌ Критическая ошибка установки состояния уведомлений: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Проверка включены ли уведомления
+     */
+    public boolean areNotificationsEnabled() {
+        try {
+            String url = supabaseUrl + "/rest/v1/bot_settings?id=eq.1&select=notifications_enabled";
+
+            String response = webClient.get()
+                    .uri(url)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .onErrorReturn("[]")
+                    .block();
+
+            log.info("🔍 Ответ от Supabase: {}", response);
+
+            if (response != null && response.startsWith("[") && response.length() > 2) {
+                JsonNode jsonNode = objectMapper.readTree(response);
+                if (jsonNode.isArray() && jsonNode.size() > 0) {
+                    boolean enabled = jsonNode.get(0).get("notifications_enabled").asBoolean();
+                    log.info("✅ Статус уведомлений из БД: {}", enabled);
+                    return enabled;
+                }
+            }
+
+            // Если записи нет - создаем её
+            log.info("📝 Запись не найдена, создаем новую с уведомлениями ВКЛ");
+            setNotificationsState(true);
+            return true;
+
+        } catch (Exception e) {
+            log.error("❌ Ошибка проверки настроек уведомлений: {}", e.getMessage());
+            // Возвращаем true по умолчанию
+            return true;
+        }
+    }
+
+    /**
+     * Переключение уведомлений (старый метод для обратной совместимости)
+     */
     public boolean toggleNotifications() {
         try {
             boolean currentState = areNotificationsEnabled();
             boolean newState = !currentState;
 
-            String url = supabaseUrl + "/rest/v1/bot_settings";
+            boolean success = setNotificationsState(newState);
 
-            Map<String, Object> data = new HashMap<>();
-            data.put("id", 1);
-            data.put("notifications_enabled", newState);
-            data.put("updated_at", java.time.OffsetDateTime.now().toString());
+            if (success) {
+                log.info("✅ Уведомления переключены: {} -> {}",
+                        currentState ? "ВКЛ" : "ВЫКЛ",
+                        newState ? "ВКЛ" : "ВЫКЛ");
+            }
 
-            // UPSERT: если запись существует - обновляем, если нет - создаем
-            String response = webClient.post()
-                    .uri(url)
-                    .header("Prefer", "resolution=merge-duplicates")
-                    .header("Prefer", "return=representation")
-                    .bodyValue(data)
-                    .retrieve()
-                    .bodyToMono(String.class)
-                    .block();
-
-            log.info("✅ Уведомления переключены: {} -> {}",
-                    currentState ? "ВКЛ" : "ВЫКЛ",
-                    newState ? "ВКЛ" : "ВЫКЛ");
-            return newState;
+            return success;
 
         } catch (Exception e) {
-            log.error("❌ Ошибка переключения уведомлений", e);
-            // Безопасный fallback - возвращаем текущее состояние
-            try {
-                return areNotificationsEnabled();
-            } catch (Exception ex) {
-                log.error("❌ Критическая ошибка получения состояния уведомлений", ex);
-                return true; // Значение по умолчанию
-            }
+            log.error("❌ Ошибка переключения уведомлений: {}", e.getMessage());
+            return areNotificationsEnabled();
         }
-    }
-
-    public boolean forceEnableNotifications() {
-        return setNotificationsState(true);
-    }
-
-    public boolean forceDisableNotifications() {
-        return setNotificationsState(false);
     }
 }
