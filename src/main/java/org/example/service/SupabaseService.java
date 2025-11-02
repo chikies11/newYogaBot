@@ -370,16 +370,42 @@ public class SupabaseService {
                     .bodyToMono(String.class)
                     .block();
 
-            JsonNode jsonNode = objectMapper.readTree(response);
-            if (jsonNode.isArray() && jsonNode.size() > 0) {
-                return jsonNode.get(0).get("notifications_enabled").asBoolean();
+            if (response != null && response.contains("notifications_enabled")) {
+                com.fasterxml.jackson.databind.JsonNode jsonNode = objectMapper.readTree(response);
+                if (jsonNode.isArray() && jsonNode.size() > 0) {
+                    return jsonNode.get(0).get("notifications_enabled").asBoolean();
+                }
             }
 
-            return true; // default value
+            // Если записи нет - создаем её с включенными уведомлениями
+            initializeBotSettings();
+            return true;
 
         } catch (Exception e) {
             log.error("❌ Ошибка проверки настроек уведомлений", e);
-            return true;
+            return true; // default value
+        }
+    }
+
+    private void initializeBotSettings() {
+        try {
+            String url = supabaseUrl + "/rest/v1/bot_settings";
+
+            Map<String, Object> data = new HashMap<>();
+            data.put("id", 1);
+            data.put("notifications_enabled", true);
+
+            webClient.post()
+                    .uri(url)
+                    .header("Prefer", "return=representation")
+                    .bodyValue(data)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+
+            log.info("✅ Настройки бота инициализированы");
+        } catch (Exception e) {
+            log.error("❌ Ошибка инициализации настроек бота", e);
         }
     }
 
@@ -388,25 +414,37 @@ public class SupabaseService {
             boolean currentState = areNotificationsEnabled();
             boolean newState = !currentState;
 
-            String url = supabaseUrl + "/rest/v1/bot_settings?id=eq.1";
+            String url = supabaseUrl + "/rest/v1/bot_settings";
 
             Map<String, Object> data = new HashMap<>();
+            data.put("id", 1);
             data.put("notifications_enabled", newState);
+            data.put("updated_at", java.time.OffsetDateTime.now().toString());
 
-            webClient.patch()
+            // UPSERT: если запись существует - обновляем, если нет - создаем
+            String response = webClient.post()
                     .uri(url)
+                    .header("Prefer", "resolution=merge-duplicates")
                     .header("Prefer", "return=representation")
                     .bodyValue(data)
                     .retrieve()
                     .bodyToMono(String.class)
                     .block();
 
-            log.info("✅ Уведомления переключены: {}", newState ? "ВКЛ" : "ВЫКЛ");
+            log.info("✅ Уведомления переключены: {} -> {}",
+                    currentState ? "ВКЛ" : "ВЫКЛ",
+                    newState ? "ВКЛ" : "ВЫКЛ");
             return newState;
 
         } catch (Exception e) {
             log.error("❌ Ошибка переключения уведомлений", e);
-            return areNotificationsEnabled();
+            // Безопасный fallback - возвращаем текущее состояние
+            try {
+                return areNotificationsEnabled();
+            } catch (Exception ex) {
+                log.error("❌ Критическая ошибка получения состояния уведомлений", ex);
+                return true; // Значение по умолчанию
+            }
         }
     }
 
