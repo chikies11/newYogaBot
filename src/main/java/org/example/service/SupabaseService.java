@@ -29,13 +29,101 @@ public class SupabaseService {
     @Value("${supabase.key}")
     private String supabaseKey;
 
-    public SupabaseService() {
+    public SupabaseService(@Value("${supabase.url}") String supabaseUrl,
+                           @Value("${supabase.key}") String supabaseKey) {
         this.objectMapper = new ObjectMapper();
+
+        // Проверяем что переменные не пустые
+        if (supabaseUrl == null || supabaseUrl.isEmpty()) {
+            throw new IllegalArgumentException("Supabase URL не настроен");
+        }
+        if (supabaseKey == null || supabaseKey.isEmpty()) {
+            throw new IllegalArgumentException("Supabase Key не настроен");
+        }
+
+        this.supabaseUrl = supabaseUrl;
+        this.supabaseKey = supabaseKey;
+
         this.webClient = WebClient.builder()
                 .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + supabaseKey)
                 .defaultHeader("apikey", supabaseKey)
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .defaultHeader("Prefer", "return=minimal")
                 .build();
+
+        log.info("✅ SupabaseService инициализирован с URL: {}", supabaseUrl);
+    }
+
+    // Упрощенный метод для установки состояния уведомлений
+    private boolean setNotificationsState(boolean enabled) {
+        try {
+            log.info("🔄 Установка состояния уведомлений: {}", enabled);
+
+            String url = supabaseUrl + "/rest/v1/bot_settings?on_conflict=id";
+
+            Map<String, Object> data = Map.of(
+                    "id", 1,
+                    "notifications_enabled", enabled,
+                    "updated_at", java.time.OffsetDateTime.now().toString()
+            );
+
+            String response = webClient.post()
+                    .uri(url)
+                    .header("Prefer", "resolution=merge-duplicates")
+                    .bodyValue(data)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .onErrorReturn("ERROR") // Обработка ошибок
+                    .block();
+
+            boolean success = response != null && !response.contains("error");
+
+            if (success) {
+                log.info("✅ Уведомления {} {}", enabled ? "ВКЛЮЧЕНЫ" : "ВЫКЛЮЧЕНЫ");
+            } else {
+                log.error("❌ Ошибка установки состояния уведомлений. Ответ: {}", response);
+            }
+
+            return success;
+
+        } catch (Exception e) {
+            log.error("❌ Критическая ошибка установки состояния уведомлений: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    public boolean areNotificationsEnabled() {
+        try {
+            String url = supabaseUrl + "/rest/v1/bot_settings?id=eq.1&select=notifications_enabled";
+
+            String response = webClient.get()
+                    .uri(url)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .onErrorReturn("[]") // При ошибке возвращаем пустой массив
+                    .block();
+
+            log.info("🔍 Ответ от Supabase: {}", response);
+
+            if (response != null && response.startsWith("[") && response.length() > 2) {
+                JsonNode jsonNode = objectMapper.readTree(response);
+                if (jsonNode.isArray() && jsonNode.size() > 0) {
+                    boolean enabled = jsonNode.get(0).get("notifications_enabled").asBoolean();
+                    log.info("✅ Статус уведомлений из БД: {}", enabled);
+                    return enabled;
+                }
+            }
+
+            // Если записи нет - создаем её
+            log.info("📝 Запись не найдена, создаем новую с уведомлениями ВКЛ");
+            setNotificationsState(true);
+            return true;
+
+        } catch (Exception e) {
+            log.error("❌ Ошибка проверки настроек уведомлений: {}", e.getMessage());
+            // Возвращаем true по умолчанию
+            return true;
+        }
     }
 
     // === МЕТОДЫ ДЛЯ РАБОТЫ С РАСПИСАНИЕМ ===
@@ -358,34 +446,7 @@ public class SupabaseService {
         }
     }
 
-    // === МЕТОДЫ ДЛЯ НАСТРОЕК ===
-
-    public boolean areNotificationsEnabled() {
-        try {
-            String url = supabaseUrl + "/rest/v1/bot_settings?id=eq.1&select=notifications_enabled";
-
-            String response = webClient.get()
-                    .uri(url)
-                    .retrieve()
-                    .bodyToMono(String.class)
-                    .block();
-
-            if (response != null && response.contains("notifications_enabled")) {
-                com.fasterxml.jackson.databind.JsonNode jsonNode = objectMapper.readTree(response);
-                if (jsonNode.isArray() && jsonNode.size() > 0) {
-                    return jsonNode.get(0).get("notifications_enabled").asBoolean();
-                }
-            }
-
-            // Если записи нет - создаем её с включенными уведомлениями
-            initializeBotSettings();
-            return true;
-
-        } catch (Exception e) {
-            log.error("❌ Ошибка проверки настроек уведомлений", e);
-            return true; // default value
-        }
-    }
+    // === МЕТОДЫ ДЛЯ НАСТРОЕК ==
 
     private void initializeBotSettings() {
         try {
@@ -454,48 +515,5 @@ public class SupabaseService {
 
     public boolean forceDisableNotifications() {
         return setNotificationsState(false);
-    }
-
-    private boolean setNotificationsState(boolean enabled) {
-        try {
-            String url = supabaseUrl + "/rest/v1/bot_settings?on_conflict=id";
-
-            Map<String, Object> data = Map.of(
-                    "id", 1,
-                    "notifications_enabled", enabled,
-                    "updated_at", java.time.OffsetDateTime.now().toString()
-            );
-
-            webClient.post()
-                    .uri(url)
-                    .header("Prefer", "resolution=merge-duplicates")
-                    .bodyValue(data)
-                    .retrieve()
-                    .bodyToMono(Void.class)
-                    .block();
-
-            log.info("✅ Уведомления {} {}", enabled ? "ВКЛЮЧЕНЫ" : "ВЫКЛЮЧЕНЫ", enabled ? "✅" : "❌");
-            return true;
-
-        } catch (Exception e) {
-            log.error("❌ Ошибка установки состояния уведомлений: {}", e.getMessage());
-            return false;
-        }
-    }
-
-    public String getNotificationsStatus() {
-        boolean enabled = areNotificationsEnabled();
-        return enabled ? "ВКЛЮЧЕНЫ ✅" : "ВЫКЛЮЧЕНЫ ❌";
-    }
-
-    public void initializeDatabase() {
-        try {
-            // Таблица lessons будет создана автоматически при первом запросе
-            initializeDefaultSchedule();
-            log.info("✅ База данных Supabase инициализирована");
-
-        } catch (Exception e) {
-            log.error("❌ Ошибка инициализации базы данных Supabase", e);
-        }
     }
 }
